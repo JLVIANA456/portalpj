@@ -1,0 +1,22 @@
+{
+  "cnpj": "07203780000116",
+  "razao_social": "JLVIANA CONSULTORIA CONTABIL LTDA",
+  "nome_fantasia": "JLVIANA CONSULTORIA CONTABIL",
+  "inscricao_municipal": "43752381",
+  "codigo_municipio_ibge": "3550308",
+  "municipio": "São Paulo",
+  "uf": "SP",
+  "regime_tributario": "0",
+  "optante_simples": true,
+  "opSimpNac": "3",
+  "regApTribSN": "1",
+  "regEspTrib": "0",
+  "ambiente": "homologacao",
+  "serie_dps": "1",
+  "proximo_numero_dps": 1,
+  "atividade_principal": {
+    "cnae": "6920601",
+    "descricao": "Atividades de contabilidade"
+  },
+  "observacao": "Confirmar regApTribSN, regEspTrib e código de tributação nacional antes da primeira emissão."
+}

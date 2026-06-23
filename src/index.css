@@ -1,0 +1,50 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+input,
+button,
+select,
+textarea {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+
+.dark input,
+.dark textarea,
+.dark select {
+  background-color: var(--bg-card);
+  border-color: var(--border-light);
+}
+
+/* Evita que o input de senha fique vermelho ao preencher (por causa do autocomplete do navegador) */
+input[type="password"]:-webkit-autofill {
+  -webkit-text-fill-color: var(--text-dark);
+  /* Ou var(--text-primary) */
+  box-shadow: 0 0 0 1000px var(--bg-card) inset;
+}

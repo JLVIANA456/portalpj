@@ -1,0 +1,6 @@
+{
+  "name": "Portal de Notas PJ",
+  "description": "Portal para empresas de prestação de serviços (PJ) enviarem suas notas fiscais de forma simples, com exportação de relatórios, acompanhamento de status e painel de controle.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
