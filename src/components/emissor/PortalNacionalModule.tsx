@@ -1245,11 +1245,11 @@ function EmissaoWizard() {
             <FI label="Código de Tributação Nacional (cTribNac) *" value={f.servico_codigo_tributacao_nacional}
               onChange={v => setF(p => ({
                 ...p,
-                servico_codigo_tributacao_nacional: normalizarCodigoTribNac(v),
+                servico_codigo_tributacao_nacional: v.replace(/\D/g, '').slice(0, 6),
                 servico_favorito: '',
                 servico_codigo_municipal: '',
               }))}
-              placeholder="Preenchido automaticamente ao selecionar o serviço" />
+              placeholder="6 dígitos — preenchido pelo Serviço Nacional acima" />
             <FI label="CNAE" value={f.servico_codigo_cnae} onChange={s('servico_codigo_cnae')} />
             {/* NBS: exibido com pontos (formato 1.XXXX.XX.XX do Anexo B) */}
             <FDL label="NBS (formato 1.XXXX.XX.XX)" value={f.servico_codigo_nbs} onChange={setNbsOficial}
