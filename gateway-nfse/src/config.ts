@@ -29,7 +29,7 @@ export const config = {
     },
     producao: {
       sefin: process.env.NFSE_SEFIN_PRODUCAO_URL ||
-        'https://sefin.nfse.gov.br/SefinNacional',
+        'https://sefin.nfse.gov.br/API/SefinNacional',
       adn: process.env.NFSE_ADN_PRODUCAO_URL ||
         'https://adn.nfse.gov.br/contribuintes',
     },

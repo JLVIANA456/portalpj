@@ -119,9 +119,9 @@ Deno.serve(async (req) => {
       }
       if (body.codigo_servico_municipal != null &&
           body.codigo_servico_municipal !== '' &&
-          !/^\d{3}$/.test(String(body.codigo_servico_municipal))) {
+          !/^\d{3,5}$/.test(String(body.codigo_servico_municipal))) {
         return jsonResponse({
-          error: 'Código Municipal do Serviço (cTribMun) inválido.',
+          error: 'Código Municipal do Serviço inválido (3 dígitos para Portal Nacional, 5 para São Paulo).',
           fields: ['codigo_servico_municipal'],
         }, 400);
       }

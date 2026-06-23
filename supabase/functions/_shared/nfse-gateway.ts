@@ -44,13 +44,17 @@ export async function callFiscalGateway(
     body: JSON.stringify(request),
   });
 
-  const body = await response.json().catch(() => ({}));
+  const text = await response.text().catch(() => '');
+  let body: Record<string, unknown> = {};
+  try { body = JSON.parse(text); } catch { /* not JSON */ }
   if (!response.ok) {
+    const detail = body.errorMessage || body.message || body.error ||
+      (text.length < 300 ? text : text.slice(0, 300) + '…');
     return {
       success: false,
       statusCode: response.status,
-      errorCode: body.errorCode || 'GATEWAY_ERROR',
-      errorMessage: body.errorMessage || body.message || 'Falha no gateway fiscal.',
+      errorCode: body.errorCode || `GATEWAY_HTTP_${response.status}`,
+      errorMessage: String(detail || `Gateway retornou HTTP ${response.status}.`),
       raw: body,
     };
   }

@@ -2058,12 +2058,10 @@ function PrestadorTab() {
         endereco: { logradouro: f.prestador_logradouro, numero: f.prestador_numero, complemento: f.prestador_complemento, bairro: f.prestador_bairro, municipio: f.prestador_municipio, uf: f.prestador_uf, cep: f.prestador_cep },
         email: f.prestador_email,
         telefone: f.prestador_telefone,
-        // cNaoNIF do prestador: para PJ nacional sempre '0'
-        c_nao_nif: '0',
       };
       if (f.prestador_id) {
         const { error } = await supabase.from('nfse_emitentes').update(body).eq('id', f.prestador_id);
-        if (error) throw error;
+        if (error) throw new Error(error.message || error.details || JSON.stringify(error));
         setSalvoMsg('ok:Emitente atualizado com sucesso.');
       } else {
         const { data: result, error: fnError } = await supabase.functions.invoke('nfse-api/emitentes', { body });
@@ -2074,7 +2072,7 @@ function PrestadorTab() {
       }
       ctx.save();
     } catch (err) {
-      setSalvoMsg('error:' + (err instanceof Error ? err.message : 'Erro desconhecido'));
+      setSalvoMsg('er:' + (err instanceof Error ? err.message : JSON.stringify(err)));
     } finally { setSalvando(false); }
   };
 
@@ -2132,7 +2130,7 @@ function PrestadorTab() {
         </div>
         {salvoMsg && (
           <p className={`mt-3 rounded-lg px-3 py-2 text-sm font-medium ${salvoMsg.startsWith('ok:') ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300'}`}>
-            {salvoMsg.slice(3)}
+            {salvoMsg.replace(/^(ok|er|error):/, '')}
           </p>
         )}
       </div>
