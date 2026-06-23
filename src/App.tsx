@@ -124,7 +124,7 @@ export default function App() {
       <ToastProvider>
         <PortalNacionalModule
           user={currentUser}
-          onExit={() => changeTab('dashboard')}
+          onExit={(tab) => changeTab(typeof tab === 'string' ? tab : 'dashboard')}
           onLogout={handleLogout}
           isDarkMode={isDarkMode}
           onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}

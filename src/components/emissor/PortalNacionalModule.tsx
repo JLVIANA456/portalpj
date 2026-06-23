@@ -26,7 +26,6 @@ import {
 } from './nfseOfficialTables';
 import { supabase } from '../../lib/supabase';
 import { ResendService } from '../../lib/resend';
-import WhatsappView from '../whatsapp/WhatsappView';
 
 const WhatsappIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" {...props}>
@@ -245,7 +244,7 @@ function resolverCnaeVinculado(servico: unknown): string {
 // ─── Tipos e menu ─────────────────────────────────────────────────────────────
 interface PortalNacionalModuleProps {
   user: PJUser;
-  onExit: () => void;
+  onExit: (tab?: string) => void;
   onLogout: () => void;
   isDarkMode: boolean;
   onToggleDarkMode: () => void;
@@ -1559,14 +1558,20 @@ export default function PortalNacionalModule({ user, onExit, onLogout, isDarkMod
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
-  const navigate = (tab: PortalTab) => { setCurrentTab(tab); setSidebarOpen(false); };
+  const navigate = (tab: PortalTab) => {
+    if (tab === 'whatsapp') {
+      onExit('whatsapp');
+      return;
+    }
+    setCurrentTab(tab);
+    setSidebarOpen(false);
+  };
   const userProfile = String((user as any).perfil ?? (user as any).profile ?? (user as any).role ?? 'usuario').toLowerCase();
   const canSeeConfig = ['admin', 'administrador', 'fiscal', 'suporte', 'ti', 'developer', 'dev'].some(p => userProfile.includes(p));
   const visibleMenu = groupedMenu.filter(g => g.title !== 'Configurações' || canSeeConfig);
 
   const renderPage = () => {
     switch (currentTab) {
-      case 'whatsapp': return <WhatsappView user={user} />;
       case 'emitir_nfse': return <EmissaoWizard />;
       case 'cliente': return <ClienteTab />;
       case 'endereco': return <EnderecoTab />;
@@ -1686,7 +1691,7 @@ export default function PortalNacionalModule({ user, onExit, onLogout, isDarkMod
           </header>
           <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
             <AnimatePresence mode="wait">
-              <motion.div key={currentTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }} className="mx-auto w-full max-w-5xl h-full">
+              <motion.div key={currentTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }} className="mx-auto w-full max-w-5xl">
                 {renderPage()}
               </motion.div>
             </AnimatePresence>
