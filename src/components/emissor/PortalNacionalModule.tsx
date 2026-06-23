@@ -762,7 +762,7 @@ function EmissaoWizard() {
   const setServicoNacional = (value: string) => {
     const servico = getServicoNacionalByCodigo(value);
     const regra = getRegraIncidenciaByServico(value);
-    const codigoTributacaoNacional = normalizarCodigoTribNac(servico?.codigo ?? value);
+    const codigoTributacaoNacional = normalizarCodigoTribNac(value);
     const cnaeVinculado = resolverCnaeVinculado(servico);
     const nbsVinculado = resolverNbsVinculado(servico, value);
     setF(p => ({
@@ -1243,7 +1243,13 @@ function EmissaoWizard() {
             <FDL label="Serviço Nacional *" value={f.servico_favorito} onChange={setServicoNacional}
               options={SERVICO_NACIONAL_OPTIONS} placeholder="Digite código ou descrição" full />
             <FI label="Código de Tributação Nacional (cTribNac) *" value={f.servico_codigo_tributacao_nacional}
-              onChange={v => setF(p => ({ ...p, servico_codigo_tributacao_nacional: normalizarCodigoTribNac(v), servico_codigo_municipal: '' }))} />
+              onChange={v => setF(p => ({
+                ...p,
+                servico_codigo_tributacao_nacional: normalizarCodigoTribNac(v),
+                servico_favorito: '',
+                servico_codigo_municipal: '',
+              }))}
+              placeholder="Preenchido automaticamente ao selecionar o serviço" />
             <FI label="CNAE" value={f.servico_codigo_cnae} onChange={s('servico_codigo_cnae')} />
             {/* NBS: exibido com pontos (formato 1.XXXX.XX.XX do Anexo B) */}
             <FDL label="NBS (formato 1.XXXX.XX.XX)" value={f.servico_codigo_nbs} onChange={setNbsOficial}
