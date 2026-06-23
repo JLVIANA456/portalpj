@@ -60,8 +60,8 @@ export default function Sidebar({
 
   // Otimização: Evita recriar o array de navegação a cada render
   const menuItems = useMemo(() => [
+    { id: 'dashboard', label: 'Visão Geral', icon: Home },
     { id: 'clientes', label: 'Clientes', icon: Users },
-    { id: 'dashboard', label: 'Painel Geral', icon: Home },
     { id: 'whatsapp', label: 'WhatsApp', icon: WhatsappIcon },
     { id: 'emissor_nacional', label: 'Emissor de Notas (Nota do Milhão) SP', icon: ReceiptText },
     { id: 'portal_nacional', label: 'Portal Nacional', icon: Building2 },
