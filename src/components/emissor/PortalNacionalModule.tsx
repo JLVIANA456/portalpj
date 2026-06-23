@@ -1242,14 +1242,36 @@ function EmissaoWizard() {
           <Card title="Serviço Prestado" cols={3}>
             <FDL label="Serviço Nacional *" value={f.servico_favorito} onChange={setServicoNacional}
               options={SERVICO_NACIONAL_OPTIONS} placeholder="Digite código ou descrição" full />
-            <FI label="Código de Tributação Nacional (cTribNac) *" value={f.servico_codigo_tributacao_nacional}
-              onChange={v => setF(p => ({
-                ...p,
-                servico_codigo_tributacao_nacional: v.replace(/\D/g, '').slice(0, 6),
-                servico_favorito: '',
-                servico_codigo_municipal: '',
-              }))}
-              placeholder="6 dígitos — preenchido pelo Serviço Nacional acima" />
+            {f.servico_codigo_tributacao_nacional && (
+              <div className="col-span-full flex flex-wrap items-center gap-2 py-0.5">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-3 py-1 text-xs dark:bg-blue-500/20">
+                  <span className="text-blue-500 dark:text-blue-400">cTribNac</span>
+                  <span className="font-mono font-semibold text-blue-900 dark:text-blue-200">
+                    {f.servico_codigo_tributacao_nacional}
+                  </span>
+                </span>
+                {(() => {
+                  const r = getRegraIncidenciaByServico(f.servico_codigo_tributacao_nacional);
+                  const label = r.lp
+                    ? 'LP — Local da Prestação'
+                    : r.et
+                      ? 'ET — Estab. Tomador'
+                      : 'EP — Estab. Prestador';
+                  return (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs dark:bg-slate-700">
+                      <span className="text-slate-500 dark:text-slate-400">incidência</span>
+                      <span className="font-medium text-slate-700 dark:text-slate-200">{label}</span>
+                    </span>
+                  );
+                })()}
+                {f.servico_codigo_nbs && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs dark:bg-slate-700">
+                    <span className="text-slate-500 dark:text-slate-400">NBS</span>
+                    <span className="font-mono text-slate-700 dark:text-slate-200">{f.servico_codigo_nbs}</span>
+                  </span>
+                )}
+              </div>
+            )}
             <FI label="CNAE" value={f.servico_codigo_cnae} onChange={s('servico_codigo_cnae')} />
             {/* NBS: exibido com pontos (formato 1.XXXX.XX.XX do Anexo B) */}
             <FDL label="NBS (formato 1.XXXX.XX.XX)" value={f.servico_codigo_nbs} onChange={setNbsOficial}

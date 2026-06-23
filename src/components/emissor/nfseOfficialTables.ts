@@ -371,36 +371,35 @@ export const SERVICO_NACIONAL_OPTIONS: ServicoNacionalItem[] = [
     { value: '990101', label: '990101 - Serviços sem a incidência de ISSQN e ICMS', codigo: '990101', descricao: 'Serviços sem a incidência de ISSQN e ICMS' },
 ];
 
-// ── Indicador de Operação IBS/CBS — Anexo VII v1-00-00 (26 códigos) ─────────
-// Fonte: anexovii-indop_ibscbs_v1-00-00.xlsx → Sheet IndOp
-// Substitui a constante INDOP_OPTIONS no PortalNacionalModule.tsx
+// ── Indicador de Operação IBS/CBS — Anexo C v1-01-20260122 (26 códigos) ──────
+// Fonte: anexo_c-indop_ibscbs-snnfse-v1-01-20260122.xlsx → Sheet IndOp
 export const INDOP_OPTIONS: NfseOption[] = [
-    { value: '020101', label: '020101 - Operação com bem imóvel, bem imaterial, inclusive direito, relacionada a bem imóvel' },
+    { value: '020101', label: '020101 - Operação com bem imóvel relacionada a bem imóvel' },
     { value: '020201', label: '020201 - Serviço prestado fisicamente sobre bem imóvel' },
     { value: '020301', label: '020301 - Serviço de administração e intermediação de bem imóvel' },
     { value: '030101', label: '030101 - Serviço prestado fisicamente sobre a pessoa ou fruído presencialmente por pessoa física' },
-    { value: '030102', label: '030102 - Endereço do adquirente' },
-    { value: '030103', label: '030103 - Endereço do destinatário' },
-    { value: '030104', label: '030104 - Endereço diverso do fornecedor, adquirente ou destinatário' },
-    { value: '040101', label: '040101 - Serviço de planejamento, organização e administração de feiras, exposições, congressos, espetáculos, exibições e congêneres' },
+    { value: '030102', label: '030102 - Local do endereço do adquirente (Inc. III)' },
+    { value: '030103', label: '030103 - Local do endereço do destinatário (Inc. III)' },
+    { value: '030104', label: '030104 - Endereço diverso do fornecedor, adquirente ou destinatário (Inc. III)' },
+    { value: '040101', label: '040101 - Serviço de planejamento, organização e administração de feiras, exposições, congressos e congêneres' },
     { value: '050101', label: '050101 - Serviço prestado fisicamente sobre bem móvel material' },
-    { value: '050102', label: '050102 - Endereço do adquirente' },
-    { value: '050103', label: '050103 - Endereço do destinatário' },
-    { value: '050104', label: '050104 - Endereço diverso do fornecedor, adquirente ou destinatário' },
+    { value: '050102', label: '050102 - Local do endereço do adquirente (Inc. V)' },
+    { value: '050103', label: '050103 - Local do endereço do destinatário (Inc. V)' },
+    { value: '050104', label: '050104 - Endereço diverso do fornecedor, adquirente ou destinatário (Inc. V)' },
     { value: '050201', label: '050201 - Serviços portuários' },
     { value: '060101', label: '060101 - Serviço de transporte de passageiros' },
-    { value: '070101', label: '070101 - Serviço de transporte de carga' },
-    { value: '070102', label: '070102 - Local da retirada' },
-    { value: '080101', label: '080101 - Serviço de exploração de via' },
-    { value: '100101', label: '100101 - Cessão de espaço para prestação de serviços publicitários, em operações onerosas (4)' },
-    { value: '100102', label: '100102 - Local do domicílio do destinatário, nos casos de adquirente residente ou domiciliado no exterior' },
-    { value: '100201', label: '100201 - Cessão de espaço para prestação de serviços publicitários, em operações não onerosas (4)' },
-    { value: '100301', label: '100301 - Demais serviços, em operações onerosas' },
-    { value: '100302', label: '100302 - Local do domicílio do destinatário, nos casos de adquirente residente ou domiciliado no exterior' },
-    { value: '100401', label: '100401 - Demais serviços, em operações não onerosas' },
-    { value: '100501', label: '100501 - Demais bens móveis imateriais, inclusive direitos, em operações onerosas' },
-    { value: '100502', label: '100502 - Local do domicílio do destinatário, nos casos de adquirente residente ou domiciliado no exterior' },
-    { value: '100601', label: '100601 - Demais bens móveis imateriais, inclusive direitos, em operações não onerosas' },
+    { value: '070101', label: '070101 - Serviço de transporte de carga (endereço de entrega)' },
+    { value: '070102', label: '070102 - Serviço de transporte de carga (local da retirada)' },
+    { value: '080101', label: '080101 - Serviço de exploração de via (NFS-e Via)' },
+    { value: '100101', label: '100101 - Cessão de espaço para serviços publicitários — onerosas — domicílio do adquirente' },
+    { value: '100102', label: '100102 - Cessão de espaço para serviços publicitários — onerosas — adquirente no exterior' },
+    { value: '100201', label: '100201 - Cessão de espaço para serviços publicitários — não onerosas — domicílio do destinatário' },
+    { value: '100301', label: '100301 - Demais serviços onerosos — domicílio principal do adquirente' },
+    { value: '100302', label: '100302 - Demais serviços onerosos — adquirente no exterior' },
+    { value: '100401', label: '100401 - Demais serviços não onerosos — domicílio principal do destinatário' },
+    { value: '100501', label: '100501 - Demais bens imateriais onerosos — domicílio principal do adquirente' },
+    { value: '100502', label: '100502 - Demais bens imateriais onerosos — adquirente no exterior' },
+    { value: '100601', label: '100601 - Demais bens imateriais não onerosos — domicílio principal do destinatário' },
 ];
 
 // ── Helpers para lookup por código ──────────────────────────────────────────
