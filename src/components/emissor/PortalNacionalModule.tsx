@@ -26,6 +26,7 @@ import {
 } from './nfseOfficialTables';
 import { supabase } from '../../lib/supabase';
 import { ResendService } from '../../lib/resend';
+import { getNbsCorrelato } from './mapeamento/mapeamento_nbs';
 
 const WhatsappIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" {...props}>
@@ -124,7 +125,13 @@ function extrairCodigoPais(valor: string): string {
 // ─── NBS: manter formato com pontos conforme Anexo B (ex: 1.0101.11.00) ──────
 function formatarNbs(raw: string): string {
   const nbs = getNbsByCodigo(raw);
-  return nbs?.codigo || '';
+  if (nbs?.codigo) return nbs.codigo;
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length !== 9) return '';
+  // Se já está no formato pontilhado correto (X.XXXX.XX.XX), devolve direto
+  if (/^\d\.\d{4}\.\d{2}\.\d{2}$/.test(raw)) return raw;
+  // Formata 9 dígitos brutos para X.XXXX.XX.XX
+  return `${digits[0]}.${digits.slice(1, 5)}.${digits.slice(5, 7)}.${digits.slice(7, 9)}`;
 }
 
 // ─── CEP / CNPJ lookup ───────────────────────────────────────────────────────
@@ -232,7 +239,11 @@ function localizarNbsOficial(raw: unknown): string {
 function resolverNbsVinculado(servico: unknown, servicoSelecionado: string): string {
   const s = (servico ?? {}) as Record<string, unknown>;
   const nbsDireto = primeiroValorTexto(s.codigo_nbs, s.nbs_codigo, s.nbs, s.codigoNbs, s.nbsCodigo, s.nbs_oficial);
-  return localizarNbsOficial(nbsDireto || '');
+  let nbs = localizarNbsOficial(nbsDireto || '');
+  if (!nbs && servicoSelecionado) {
+    nbs = localizarNbsOficial(getNbsCorrelato(normalizarCodigoTribNac(servicoSelecionado)));
+  }
+  return nbs;
 }
 
 function resolverCnaeVinculado(servico: unknown): string {
@@ -1221,7 +1232,7 @@ function EmissaoWizard() {
               options={MUNICIPIO_OPTIONS} placeholder="Digite cidade, UF ou código IBGE" />
             <FI label="Código IBGE (7 dígitos) *" value={f.tomador_codigo_municipio_ibge} onChange={s('tomador_codigo_municipio_ibge')} />
             <FS label="UF *" value={f.tomador_uf} onChange={s('tomador_uf')} options={UF_OPTIONS} />
-            <FS label="País *" value={f.tomador_pais} onChange={s('tomador_pais')} options={PAIS_OPTIONS} />
+            <FDL label="País *" value={f.tomador_pais} onChange={s('tomador_pais')} options={PAIS_OPTIONS} placeholder="Digite país" />
           </Card>
           {/* cNaoNIF é uma alternativa a CPF/CNPJ/NIF no XSD */}
           <Card title="Identificação Fiscal do Tomador" cols={2}>
@@ -1243,10 +1254,10 @@ function EmissaoWizard() {
             <FDL label="Serviço Nacional *" value={f.servico_favorito} onChange={setServicoNacional}
               options={SERVICO_NACIONAL_OPTIONS} placeholder="Digite código ou descrição" full />
             {f.servico_codigo_tributacao_nacional && (
-              <div className="col-span-full flex flex-wrap items-center gap-2 py-0.5">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-3 py-1 text-xs dark:bg-blue-500/20">
-                  <span className="text-blue-500 dark:text-blue-400">cTribNac</span>
-                  <span className="font-mono font-semibold text-blue-900 dark:text-blue-200">
+              <div className="col-span-full flex flex-wrap items-center gap-3 py-1 mt-1">
+                <span className="inline-flex items-center gap-2 rounded-full border border-indigo-300 bg-indigo-600/10 px-3.5 py-1.5 text-sm shadow-sm dark:border-indigo-500/40 dark:bg-indigo-600/15">
+                  <span className="font-medium text-indigo-500 dark:text-indigo-400">cTribNac</span>
+                  <span className="font-mono font-bold text-indigo-800 dark:text-indigo-100">
                     {f.servico_codigo_tributacao_nacional}
                   </span>
                 </span>
@@ -1258,16 +1269,16 @@ function EmissaoWizard() {
                       ? 'ET — Estab. Tomador'
                       : 'EP — Estab. Prestador';
                   return (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs dark:bg-slate-700">
-                      <span className="text-slate-500 dark:text-slate-400">incidência</span>
-                      <span className="font-medium text-slate-700 dark:text-slate-200">{label}</span>
+                    <span className="inline-flex items-center gap-2 rounded-full border border-indigo-300 bg-indigo-600/10 px-3.5 py-1.5 text-sm shadow-sm dark:border-indigo-500/40 dark:bg-indigo-600/15">
+                      <span className="font-medium text-indigo-500 dark:text-indigo-400">Incidência</span>
+                      <span className="font-semibold text-indigo-800 dark:text-indigo-100">{label}</span>
                     </span>
                   );
                 })()}
                 {f.servico_codigo_nbs && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs dark:bg-slate-700">
-                    <span className="text-slate-500 dark:text-slate-400">NBS</span>
-                    <span className="font-mono text-slate-700 dark:text-slate-200">{f.servico_codigo_nbs}</span>
+                  <span className="inline-flex items-center gap-2 rounded-full border border-indigo-300 bg-indigo-600/10 px-3.5 py-1.5 text-sm shadow-sm dark:border-indigo-500/40 dark:bg-indigo-600/15">
+                    <span className="font-medium text-indigo-500 dark:text-indigo-400">NBS</span>
+                    <span className="font-mono font-bold text-indigo-800 dark:text-indigo-100">{f.servico_codigo_nbs}</span>
                   </span>
                 )}
               </div>
@@ -1794,7 +1805,7 @@ function EnderecoTab() {
         <FI label="Código IBGE" value={f.endereco_codigo_municipio_ibge} onChange={s('endereco_codigo_municipio_ibge')} />
         <FS label="UF" value={f.endereco_uf} onChange={s('endereco_uf')} options={UF_OPTIONS} />
         <FI label="Código do País" value={f.endereco_pais_codigo} onChange={s('endereco_pais_codigo')} />
-        <FS label="Nome do País" value={f.endereco_pais_nome} onChange={s('endereco_pais_nome')} options={PAIS_OPTIONS} />
+        <FDL label="Nome do País" value={f.endereco_pais_nome} onChange={s('endereco_pais_nome')} options={PAIS_OPTIONS} placeholder="Digite país" />
       </Card>
       <SaveBtn onSave={ctx.save} />
     </div>

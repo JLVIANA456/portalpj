@@ -63,6 +63,11 @@ export const initialServicoTabState = {
   servico_municipio_prestacao: '', servico_codigo_municipio_prestacao_ibge: '',
   servico_municipio_incidencia: '', servico_codigo_municipio_incidencia_ibge: '',
   servico_exigibilidade_iss: '', servico_natureza_operacao: '', servico_local_prestacao: '',
+  // campos adicionais usados pelo emissor
+  servico_favorito: '',
+  servico_codigo_tributacao_nacional: '',
+  tributacao_natureza_operacao: '',
+  servico_codigo_municipal: '',
 };
 
 export const initialImpostosState = {
@@ -109,6 +114,10 @@ export const initialDpsState = {
   dps_valor_liquido: '0', dps_iss_retido: false, dps_exigibilidade_iss: '',
   dps_regime_especial_tributacao: '', dps_optante_simples_nacional: false,
   dps_incentivo_fiscal: false,
+  // campos adicionais usados pelo emissor
+  dps_servico_favorito: '',
+  dps_servico_codigo_tributacao_nacional: '',
+  dps_tributacao_natureza_operacao: '',
 };
 
 export const initialPrestadorState = {
