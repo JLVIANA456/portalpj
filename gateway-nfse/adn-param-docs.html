@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API NFS-e - ADN Parâmetros Municipais</title>
+    <!-- needed for adaptive design -->
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://fonts.googleapis.com/css?family=Montserrat:300,400,700|Roboto:300,400,700" rel="stylesheet">
+
+    <!--
+    Redoc doesn't change outer page styles
+    -->
+    <link href="index.css" rel="stylesheet" type="text/css">
+    
+                            <style>
+                                .jAREBv {
+                                    font-size: 16px !important;
+                                    color: rgb(51, 51, 51) !important;
+                                }
+                            </style>
+                            <script type='application/javascript'>
+                                window.onload = function (evt) {
+                                    // 
+                                    var elemDiv = document.createElement('div');
+                                    elemDiv.setAttribute('id', 'barra-superior');
+                                    document.body.appendChild(elemDiv);
+                                    // 
+                                    var esp = document.createElement('span');
+                                    esp.innerText = 'Ambiente de Produção Restrita';
+                                    document.getElementById('barra-superior').appendChild(esp);
+                                };
+                            </script>
+                            <link href='/parametrizacao/redoc-custom.css' rel='stylesheet' media='screen' type='text/css' />
+
+</head>
+<body>
+    <div id="redoc-container"></div>
+    <script src="redoc.standalone.js"></script>
+    <script src="index.js"></script>
+</body>
+</html>

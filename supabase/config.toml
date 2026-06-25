@@ -1,0 +1,10 @@
+project_id = "portal-pj"
+
+[functions.nfse-api]
+verify_jwt = true
+
+[functions.nfse-certificate]
+verify_jwt = true
+
+[functions.nfse-worker]
+verify_jwt = false

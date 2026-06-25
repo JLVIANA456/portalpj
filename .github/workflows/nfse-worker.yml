@@ -1,0 +1,23 @@
+name: NFS-e Worker
+
+on:
+  schedule:
+    # Executa a cada minuto
+    - cron: '* * * * *'
+  workflow_dispatch: # permite disparar manualmente
+
+jobs:
+  run-worker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Chamar nfse-worker
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST \
+            -H "x-worker-secret: ${{ secrets.NFSE_WORKER_SECRET }}" \
+            "https://nitjribfgvlnndhberxg.supabase.co/functions/v1/nfse-worker")
+          echo "Status HTTP: $STATUS"
+          if [ "$STATUS" -lt 200 ] || [ "$STATUS" -ge 300 ]; then
+            echo "Worker retornou erro: $STATUS"
+            exit 1
+          fi

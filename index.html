@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Portal PJ – Gestão de notas fiscais, conciliação bancária e cobranças para prestadores de serviços." />
+  <title>Portal PJ</title>
+
+  <!-- PDF.js: leitura e extração de texto de PDFs diretamente no browser -->
+  <!-- Permite que o ConciliacaoView leia PDFs sem precisar do servidor -->
+  <script>
+    // Configura o worker do PDF.js antes de carregar o módulo
+    window.pdfjsWorkerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs';
+  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs" type="module"></script>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
+</html>
