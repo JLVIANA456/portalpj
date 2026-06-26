@@ -298,6 +298,10 @@ export default function CobrancasView({ user }: CobrancasViewProps) {
   const [isBulkSaving, setIsBulkSaving] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ sent: number; failed: number; total: number } | null>(null);
 
+  // Confirm dialog
+  const [confirmDialog, setConfirmDialog] = useState<{ message: string; onConfirm: () => void } | null>(null);
+  const showConfirm = (message: string, onConfirm: () => void) => setConfirmDialog({ message, onConfirm });
+
   // Email modal
   const [isEmailOpen, setIsEmailOpen] = useState(false);
   const [emailCobId, setEmailCobId] = useState<string|null>(null);
@@ -419,7 +423,7 @@ export default function CobrancasView({ user }: CobrancasViewProps) {
         const wb = XLSX.read(new Uint8Array(ev.target?.result as ArrayBuffer), { type: 'array' });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, defval: '' });
-        if (rows.length < 2) { alert('Planilha vazia ou sem dados.'); return; }
+        if (rows.length < 2) { toast.warning('Planilha vazia', 'O arquivo não contém dados suficientes.'); return; }
 
         const headers = rows[0].map((h: any) => String(h ?? '').trim());
         const fmt = detectFormat(headers);
@@ -429,11 +433,11 @@ export default function CobrancasView({ user }: CobrancasViewProps) {
           ? parseHorizontal(rows, clients, parseInt(importYear) || new Date().getFullYear())
           : parseVertical(rows, clients);
 
-        if (records.length === 0) { alert('Nenhum registro válido encontrado.'); return; }
+        if (records.length === 0) { toast.warning('Nenhum registro encontrado', 'Verifique se o arquivo tem dados válidos.'); return; }
 
         setPreview(records.map(r => ({ ...r, _remove: false })));
         setImportStep('preview');
-      } catch { alert('Erro ao ler o arquivo. Verifique se é um .xlsx ou .xls válido.'); }
+      } catch { toast.error('Erro ao ler o arquivo', 'Verifique se é um .xlsx ou .xls válido.'); }
     };
     reader.readAsArrayBuffer(file);
     e.target.value = '';
@@ -488,14 +492,15 @@ export default function CobrancasView({ user }: CobrancasViewProps) {
   };
 
   // ── Delete ──
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Excluir esta cobrança?')) return;
-    try {
-      await deleteCobranca(id);
-      setCobrancas(prev => prev.filter(c => c.id !== id));
-    } catch (err: any) {
-      toast.error('Erro ao excluir', err?.message || 'Erro desconhecido.');
-    }
+  const handleDelete = (id: string) => {
+    showConfirm('Excluir esta cobrança?', async () => {
+      try {
+        await deleteCobranca(id);
+        setCobrancas(prev => prev.filter(c => c.id !== id));
+      } catch (err: any) {
+        toast.error('Erro ao excluir', err?.message || 'Erro desconhecido.');
+      }
+    });
   };
 
   // ── Email ──
@@ -515,10 +520,10 @@ export default function CobrancasView({ user }: CobrancasViewProps) {
 
   const handleOpenEmail = (cob: Cobranca) => {
     const cl = clientInfo(cob.clientId);
-    if (!cl) { alert('Cliente não encontrado.'); return; }
+    if (!cl) { toast.warning('Cliente não encontrado', 'O cliente desta cobrança não existe mais.'); return; }
 
     const cts = getClientContactList(cl);
-    if (cts.length === 0) { alert('Nenhum e-mail cadastrado para este cliente.'); return; }
+    if (cts.length === 0) { toast.warning('Sem e-mail', 'Nenhum e-mail cadastrado para este cliente.'); return; }
 
     setEmailCobId(cob.id);
     setEmailContacts(cts);
@@ -748,7 +753,7 @@ export default function CobrancasView({ user }: CobrancasViewProps) {
               }`}
             >
               {t.label}
-              {t.key !== 'todos' && (
+              {t.key !== 'todos' && cobrancas.filter(c => computeStatus(c) === t.key).length > 0 && (
                 <span className="ml-1.5 opacity-70">
                   {cobrancas.filter(c => computeStatus(c) === t.key).length}
                 </span>
@@ -1461,6 +1466,40 @@ export default function CobrancasView({ user }: CobrancasViewProps) {
                   </>
                 );
               })()}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── CONFIRM DIALOG ── */}
+      <AnimatePresence>
+        {confirmDialog && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setConfirmDialog(null)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+              className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-sm p-6 space-y-5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-rose-100 dark:bg-rose-500/10 flex items-center justify-center flex-shrink-0">
+                  <Trash2 className="w-5 h-5 text-rose-500" />
+                </div>
+                <div>
+                  <p className="text-base font-semibold text-slate-900 dark:text-white">Confirmar exclusão</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{confirmDialog.message}</p>
+                </div>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button onClick={() => setConfirmDialog(null)}
+                  className="px-4 py-2 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
+                  Cancelar
+                </button>
+                <button onClick={() => { confirmDialog.onConfirm(); setConfirmDialog(null); }}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-sm font-medium rounded-xl transition-colors">
+                  Excluir
+                </button>
+              </div>
             </motion.div>
           </div>
         )}
