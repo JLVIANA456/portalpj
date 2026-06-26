@@ -7,7 +7,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
 import { PJUser, Client, ClientContact } from '../types';
-import { getClients, addClient, addClients, updateClient, deleteClient } from '../lib/db';
+import { getClients, addClient, addClients, updateClient, deleteClient, deleteClients } from '../lib/db';
 
 interface ClientesViewProps {
   user: PJUser;
@@ -35,6 +35,17 @@ export default function ClientesView({ user }: ClientesViewProps) {
   const [viewMode, setViewMode] = useState<ViewMode>(() =>
     (localStorage.getItem('portal_pj_clientes_view') as ViewMode) || 'grid'
   );
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean; message: string; onConfirm: () => void;
+  }>({ open: false, message: '', onConfirm: () => {} });
+
+  const openConfirm = (message: string, onConfirm: () => void) => {
+    setConfirmDialog({ open: true, message, onConfirm });
+  };
+  const closeConfirm = () => setConfirmDialog(prev => ({ ...prev, open: false }));
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalTab, setModalTab] = useState<'manual' | 'planilha'>('manual');
@@ -47,6 +58,13 @@ export default function ClientesView({ user }: ClientesViewProps) {
   const [docField, setDocField] = useState('');
   const [contacts, setContacts] = useState<LocalContact[]>([mkContact()]);
   const [observacoes, setObservacoes] = useState('');
+  // Billing defaults
+  const [descricaoPadrao, setDescricaoPadrao] = useState('');
+  const [categoriaFinanceira, setCategoriaFinanceira] = useState('');
+  const [valorPadrao, setValorPadrao] = useState('');
+  const [parcelasHabilitadas, setParcelasHabilitadas] = useState(false);
+  const [valoresParcelas, setValoresParcelas] = useState<string[]>(Array(12).fill(''));
+  const [diaVencimento, setDiaVencimento] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -71,6 +89,8 @@ export default function ClientesView({ user }: ClientesViewProps) {
   const resetForm = () => {
     setNomeFantasia(''); setRazaoSocial(''); setDocField('');
     setContacts([mkContact()]); setObservacoes('');
+    setDescricaoPadrao(''); setCategoriaFinanceira(''); setValorPadrao('');
+    setParcelasHabilitadas(false); setValoresParcelas(Array(12).fill('')); setDiaVencimento('');
     setEditingClient(null);
   };
 
@@ -88,6 +108,19 @@ export default function ClientesView({ user }: ClientesViewProps) {
         : [mkContact()]
     );
     setObservacoes(client.observacoes || '');
+    setDescricaoPadrao(client.descricaoPadrao || '');
+    setCategoriaFinanceira(client.categoriaFinanceira || '');
+    setValorPadrao(client.defaultAmount ? String(client.defaultAmount) : '');
+    if (client.valoresParcelas && client.valoresParcelas.length > 0) {
+      setParcelasHabilitadas(true);
+      const arr = Array(12).fill('');
+      client.valoresParcelas.forEach((v, i) => { if (i < 12) arr[i] = String(v); });
+      setValoresParcelas(arr);
+    } else {
+      setParcelasHabilitadas(false);
+      setValoresParcelas(Array(12).fill(''));
+    }
+    setDiaVencimento(client.dueDay ? String(client.dueDay) : '');
     setModalTab('manual');
     setIsModalOpen(true);
   };
@@ -123,6 +156,13 @@ export default function ClientesView({ user }: ClientesViewProps) {
       phone: clientContacts[0]?.phone,
       whatsapp: clientContacts[0]?.phone,
       observacoes: observacoes.trim() || undefined,
+      descricaoPadrao: descricaoPadrao.trim() || undefined,
+      categoriaFinanceira: categoriaFinanceira || undefined,
+      defaultAmount: valorPadrao ? parseFloat(valorPadrao.replace(',', '.')) || undefined : undefined,
+      valoresParcelas: parcelasHabilitadas
+        ? valoresParcelas.map(v => parseFloat(v.replace(',', '.')) || 0).filter((_, i) => i < 12)
+        : undefined,
+      dueDay: diaVencimento ? parseInt(diaVencimento) || undefined : undefined,
       createdAt: base?.createdAt ?? new Date().toISOString(),
     };
   };
@@ -234,14 +274,41 @@ export default function ClientesView({ user }: ClientesViewProps) {
     e.target.value = '';
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Remover este cliente? Ele também não aparecerá nas Cobranças.')) return;
-    try {
-      await deleteClient(id);
-      setClients(prev => prev.filter(c => c.id !== id));
-    } catch (err: any) {
-      alert(err?.message || 'Erro ao excluir cliente.');
-    }
+  const handleDelete = (id: string) => {
+    openConfirm('Remover este cliente? Ele também não aparecerá nas Cobranças.', async () => {
+      try {
+        await deleteClient(id);
+        setClients(prev => prev.filter(c => c.id !== id));
+        setSelectedIds(prev => { const n = new Set(prev); n.delete(id); return n; });
+      } catch (err: any) {
+        alert(err?.message || 'Erro ao excluir cliente.');
+      }
+    });
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedIds.size === 0) return;
+    openConfirm(`Excluir ${selectedIds.size} cliente(s) selecionado(s)? Esta ação não pode ser desfeita.`, async () => {
+      setIsBulkDeleting(true);
+      try {
+        const ids = Array.from(selectedIds) as string[];
+        await deleteClients(ids);
+        setClients(prev => prev.filter(c => !selectedIds.has(c.id)));
+        setSelectedIds(new Set());
+      } catch (err: any) {
+        alert(err?.message || 'Erro ao excluir clientes.');
+      } finally {
+        setIsBulkDeleting(false);
+      }
+    });
   };
 
   const filtered = clients.filter(c => {
@@ -256,6 +323,16 @@ export default function ClientesView({ user }: ClientesViewProps) {
       c.email?.toLowerCase().includes(t)
     );
   });
+
+  const allFilteredSelected = filtered.length > 0 && filtered.every(c => selectedIds.has(c.id));
+
+  const toggleSelectAll = () => {
+    if (allFilteredSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map(c => c.id)));
+    }
+  };
 
   // ── Form JSX (shared between add and edit) ──────────────────────
   const formJsx = (
@@ -331,6 +408,80 @@ export default function ClientesView({ user }: ClientesViewProps) {
           </div>
         </div>
 
+        {/* Padrões de cobrança */}
+        <div>
+          <h3 className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">Padrões de Cobrança</h3>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mb-3">Pré-preenchidos automaticamente ao criar cobranças para este cliente.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">Descrição Padrão</label>
+              <input type="text" value={descricaoPadrao} onChange={e => setDescricaoPadrao(e.target.value)}
+                placeholder="Ex: Mensalidade"
+                className="w-full px-3 py-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 dark:text-white" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">Categoria Financeira</label>
+              <select value={categoriaFinanceira} onChange={e => setCategoriaFinanceira(e.target.value)}
+                className="w-full px-3 py-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 dark:text-white">
+                <option value="">Selecione...</option>
+                {['Mensalidade','Projeto','Consultoria','Suporte','Licença de Software','Serviços Avulsos','Outro'].map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">Valor Total (R$)</label>
+              <input type="number" min="0" step="0.01" value={valorPadrao} onChange={e => setValorPadrao(e.target.value)}
+                placeholder="0,00"
+                className="w-full px-3 py-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 dark:text-white" />
+            </div>
+            <div className="flex items-center gap-2 pt-5 col-span-full">
+              <input type="checkbox" id="parcelasToggle" checked={parcelasHabilitadas}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setParcelasHabilitadas(e.target.checked); if (!e.target.checked) setValoresParcelas(Array(12).fill('')); }}
+                className="w-4 h-4 rounded accent-indigo-600 cursor-pointer" />
+              <label htmlFor="parcelasToggle" className="text-xs font-medium text-slate-600 dark:text-slate-400 cursor-pointer select-none">
+                Parcelado — definir valor de cada parcela individualmente
+              </label>
+            </div>
+
+            {parcelasHabilitadas && (
+              <div className="col-span-full border border-indigo-100 dark:border-indigo-800 rounded-xl p-4 bg-indigo-50/40 dark:bg-indigo-500/5">
+                <p className="text-xs font-semibold text-indigo-700 dark:text-indigo-400 mb-3">Valor por parcela (R$)</p>
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                  {Array.from({ length: 12 }, (_, i) => (
+                    <div key={i}>
+                      <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Parcela {i + 1}</label>
+                      <input
+                        type="number" min="0" step="0.01"
+                        value={valoresParcelas[i]}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                          const next = [...valoresParcelas];
+                          next[i] = e.target.value;
+                          setValoresParcelas(next);
+                        }}
+                        placeholder="0,00"
+                        className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                      />
+                    </div>
+                  ))}
+                </div>
+                {valoresParcelas.some(v => parseFloat(v) > 0) && (
+                  <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-3 font-medium">
+                    Total: R$ {valoresParcelas.reduce((s, v) => s + (parseFloat(v.replace(',', '.')) || 0), 0).toFixed(2).replace('.', ',')}
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">Dia de Vencimento</label>
+              <input type="number" min="1" max="31" value={diaVencimento} onChange={e => setDiaVencimento(e.target.value)}
+                placeholder="Ex: 10"
+                className="w-full px-3 py-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 dark:text-white" />
+            </div>
+          </div>
+        </div>
+
         {/* Observações */}
         <div>
           <h3 className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">Observações</h3>
@@ -362,8 +513,21 @@ export default function ClientesView({ user }: ClientesViewProps) {
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm hover:shadow-md transition-all group relative"
+        className={`bg-white dark:bg-slate-900 rounded-2xl border p-5 shadow-sm hover:shadow-md transition-all group relative ${
+          selectedIds.has(client.id)
+            ? 'border-indigo-400 dark:border-indigo-500 ring-2 ring-indigo-200 dark:ring-indigo-500/30'
+            : 'border-slate-200 dark:border-slate-800'
+        }`}
       >
+        {/* Checkbox (top-left) */}
+        <input
+          type="checkbox"
+          checked={selectedIds.has(client.id)}
+          onChange={() => toggleSelect(client.id)}
+          onClick={e => e.stopPropagation()}
+          className="absolute top-3.5 left-3.5 w-4 h-4 rounded accent-indigo-600 cursor-pointer"
+        />
+
         {/* Actions */}
         <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button onClick={() => openEdit(client)}
@@ -379,7 +543,7 @@ export default function ClientesView({ user }: ClientesViewProps) {
         </div>
 
         {/* Company */}
-        <div className="flex items-start gap-3 mb-4 pr-16">
+        <div className="flex items-start gap-3 mb-4 pl-6 pr-16">
           <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center flex-shrink-0">
             <Building2 className="w-5 h-5 text-indigo-500" />
           </div>
@@ -435,8 +599,20 @@ export default function ClientesView({ user }: ClientesViewProps) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group"
+        className={`transition-colors group ${
+          selectedIds.has(client.id)
+            ? 'bg-indigo-50 dark:bg-indigo-500/10'
+            : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
+        }`}
       >
+        <td className="px-4 py-3 w-10">
+          <input
+            type="checkbox"
+            checked={selectedIds.has(client.id)}
+            onChange={() => toggleSelect(client.id)}
+            className="w-4 h-4 rounded accent-indigo-600 cursor-pointer"
+          />
+        </td>
         <td className="px-4 py-3">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center flex-shrink-0">
@@ -537,27 +713,72 @@ export default function ClientesView({ user }: ClientesViewProps) {
             className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 dark:text-white"
           />
         </div>
-        {/* Right side: count + view toggle */}
+        {/* Right side: select all + count + view toggle */}
         <div className="flex items-center gap-3 flex-shrink-0">
+          {filtered.length > 0 && (
+            <label className="flex items-center gap-1.5 cursor-pointer select-none" title={allFilteredSelected ? 'Desmarcar todos' : 'Selecionar todos'}>
+              <input
+                type="checkbox"
+                checked={allFilteredSelected}
+                onChange={toggleSelectAll}
+                className="w-4 h-4 rounded accent-indigo-600 cursor-pointer"
+              />
+              <span className="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">
+                {allFilteredSelected ? 'Desmarcar' : 'Selecionar'} todos
+              </span>
+            </label>
+          )}
           <span className="text-xs text-slate-400 hidden sm:block">{filtered.length} cliente(s)</span>
           <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
-          <button
-            onClick={() => setView('grid')}
-            className={`p-1.5 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
-            title="Visualização em grade"
-          >
-            <LayoutGrid className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => setView('list')}
-            className={`p-1.5 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
-            title="Visualização em lista"
-          >
-            <List className="w-4 h-4" />
-          </button>
+            <button
+              onClick={() => setView('grid')}
+              className={`p-1.5 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
+              title="Visualização em grade"
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setView('list')}
+              className={`p-1.5 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
+              title="Visualização em lista"
+            >
+              <List className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </div>
+
+      {/* Bulk action bar */}
+      <AnimatePresence>
+        {selectedIds.size > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-800 rounded-2xl px-4 py-3 flex items-center justify-between gap-3"
+          >
+            <span className="text-sm text-rose-700 dark:text-rose-400 font-medium">
+              {selectedIds.size} cliente(s) selecionado(s)
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setSelectedIds(new Set())}
+                className="px-3 py-1.5 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleBulkDelete}
+                disabled={isBulkDeleting}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-white text-sm font-medium rounded-xl transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+                {isBulkDeleting ? 'Excluindo...' : `Excluir ${selectedIds.size} selecionado(s)`}
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Loading */}
       {isLoading && (
@@ -601,6 +822,15 @@ export default function ClientesView({ user }: ClientesViewProps) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+                  <th className="px-4 py-3 w-10">
+                    <input
+                      type="checkbox"
+                      checked={allFilteredSelected}
+                      onChange={toggleSelectAll}
+                      className="w-4 h-4 rounded accent-indigo-600 cursor-pointer"
+                      title={allFilteredSelected ? 'Desmarcar todos' : 'Selecionar todos'}
+                    />
+                  </th>
                   {['Empresa', 'CNPJ / CPF', 'Contatos', 'Observações', 'Cadastrado', ''].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">
                       {h}
@@ -621,20 +851,63 @@ export default function ClientesView({ user }: ClientesViewProps) {
         </div>
       )}
 
+      {/* ── CONFIRM DIALOG ── */}
+      <AnimatePresence>
+        {confirmDialog.open && (
+          <div className="fixed inset-0 z-[200]">
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={closeConfirm}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="relative w-screen h-screen max-w-none sm:max-w-none top-0 left-0 translate-x-0 translate-y-0 bg-white dark:bg-slate-900 rounded-none shadow-2xl flex flex-col items-center justify-center p-6"
+            >
+              <div className="flex items-start gap-3 mb-5">
+                <div className="w-10 h-10 rounded-full bg-rose-100 dark:bg-rose-500/20 flex items-center justify-center flex-shrink-0">
+                  <Trash2 className="w-5 h-5 text-rose-500" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-slate-900 dark:text-white mb-1">Confirmar exclusão</h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">{confirmDialog.message}</p>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={closeConfirm}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => { closeConfirm(); confirmDialog.onConfirm(); }}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-sm font-medium rounded-xl transition-colors"
+                >
+                  Excluir
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* ── MODAL ── */}
       <AnimatePresence>
         {isModalOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[100]">
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={closeModal}
               className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
             />
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 max-h-[92vh] flex flex-col"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="relative w-screen h-screen max-w-none sm:max-w-none top-0 left-0 translate-x-0 translate-y-0 bg-white dark:bg-slate-900 rounded-none shadow-2xl flex flex-col"
             >
               {/* Modal Header */}
               <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between flex-shrink-0">

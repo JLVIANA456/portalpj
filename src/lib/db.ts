@@ -1323,6 +1323,11 @@ function mapDbCliente(row: any): Client {
     phone: contacts[0]?.phone,
     whatsapp: contacts[0]?.phone,
     observacoes: row.observacoes || undefined,
+    descricaoPadrao: row.descricao_padrao || undefined,
+    categoriaFinanceira: row.categoria_financeira || undefined,
+    defaultAmount: row.valor_padrao ?? undefined,
+    valoresParcelas: Array.isArray(row.valores_parcelas) && row.valores_parcelas.length > 0 ? row.valores_parcelas : undefined,
+    dueDay: row.dia_vencimento ?? undefined,
     createdAt: row.created_at || new Date().toISOString(),
   };
 }
@@ -1369,6 +1374,11 @@ export async function addClient(tenantId: string, client: Client): Promise<void>
     document: client.document || null,
     contacts: client.contacts || [],
     observacoes: client.observacoes || null,
+    descricao_padrao: client.descricaoPadrao || null,
+    categoria_financeira: client.categoriaFinanceira || null,
+    valor_padrao: client.defaultAmount ?? null,
+    valores_parcelas: client.valoresParcelas ?? null,
+    dia_vencimento: client.dueDay ?? null,
     created_at: client.createdAt,
   });
   if (error) throw new Error(`Erro ao salvar cliente: ${error.message}`);
@@ -1398,6 +1408,11 @@ export async function updateClient(id: string, client: Partial<Client>): Promise
     document: client.document || null,
     contacts: client.contacts || [],
     observacoes: client.observacoes || null,
+    descricao_padrao: client.descricaoPadrao || null,
+    categoria_financeira: client.categoriaFinanceira || null,
+    valor_padrao: client.defaultAmount ?? null,
+    valores_parcelas: client.valoresParcelas ?? null,
+    dia_vencimento: client.dueDay ?? null,
   }).eq('id', id);
   if (error) throw new Error(`Erro ao atualizar cliente: ${error.message}`);
 }
@@ -1405,6 +1420,12 @@ export async function updateClient(id: string, client: Partial<Client>): Promise
 export async function deleteClient(id: string): Promise<void> {
   const { error } = await supabase.from('clientes').delete().eq('id', id);
   if (error) throw new Error(`Erro ao excluir cliente: ${error.message}`);
+}
+
+export async function deleteClients(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const { error } = await supabase.from('clientes').delete().in('id', ids);
+  if (error) throw new Error(`Erro ao excluir clientes: ${error.message}`);
 }
 
 // ── Cobranças ─────────────────────────────────────────────

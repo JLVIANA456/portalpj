@@ -87,7 +87,10 @@ export interface Client {
   numeroContrato?: string;
   exigeOC?: boolean;
   observacoes?: string;
+  descricaoPadrao?: string;
+  categoriaFinanceira?: string;
   defaultAmount?: number;
+  valoresParcelas?: number[];
   dueDay?: number;
   createdAt: string;
 }

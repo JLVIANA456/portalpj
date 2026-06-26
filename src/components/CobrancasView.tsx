@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Mail, Plus, Trash2, Send, CheckCircle2, Search, X,
   FileText, Loader2, Link, UploadCloud, Download,
-  AlertTriangle, ChevronDown, DollarSign, Clock, Filter
+  AlertTriangle, ChevronDown, DollarSign, Clock, Filter, Users
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
@@ -21,6 +21,20 @@ interface PreviewRow extends Partial<Cobranca> {
   _remove?: boolean;
 }
 
+interface BulkClientForm {
+  descricao: string;
+  dataVencimento: string;
+  valor: string;
+  categoriaFinanceira: string;
+  status: CobrancaStatus;
+  observacoes: string;
+}
+
+const emptyBulkForm = (): BulkClientForm => ({
+  descricao: '', dataVencimento: '', valor: '',
+  categoriaFinanceira: '', status: 'em_aberto', observacoes: '',
+});
+
 // ─────────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────────
@@ -32,7 +46,6 @@ const STATUS_CFG: Record<CobrancaStatus, { label: string; cls: string }> = {
   cancelado: { label: 'Cancelado', cls: 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700' },
 };
 
-const FORMAS = ['Boleto', 'PIX', 'Transferência Bancária', 'Cartão de Crédito', 'Cartão de Débito', 'Dinheiro', 'Cheque', 'Outro'];
 const CATEGORIAS = ['Mensalidade', 'Projeto', 'Consultoria', 'Suporte', 'Licença de Software', 'Serviços Avulsos', 'Outro'];
 
 const MONTHS_PT = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
@@ -188,10 +201,6 @@ function parseVertical(rows: any[][], clients: Client[]): PreviewRow[] {
   const cValor = findCol(headers, ['VALOR']);
   const cDesc  = findCol(headers, ['DESCRI','SERVI']);
   const cCateg = findCol(headers, ['CATEG']);
-  const cForma = findCol(headers, ['FORMA','RECEBIM']);
-  const cConta = findCol(headers, ['CONTA BANC','CONTA']);
-  const cCC    = findCol(headers, ['CENTRO DE CUSTO','CENTRO CUSTO','CC']);
-  const cOC    = findCol(headers, ['EXIGE OC','OC','ORDEM DE COMPRA']);
   const cStat  = findCol(headers, ['STATUS']);
   const cObs   = findCol(headers, ['OBSERV','OBS']);
 
@@ -218,10 +227,6 @@ function parseVertical(rows: any[][], clients: Client[]): PreviewRow[] {
       dataVencimento: cVenc >= 0 ? parseDate(row[cVenc]) : '',
       valor,
       categoriaFinanceira: cCateg >= 0 ? String(row[cCateg] ?? '').trim() || undefined : undefined,
-      formaRecebimento:    cForma >= 0 ? String(row[cForma] ?? '').trim() || undefined : undefined,
-      contaBancaria:       cConta >= 0 ? String(row[cConta] ?? '').trim() || undefined : undefined,
-      centroCusto:         cCC >= 0    ? String(row[cCC] ?? '').trim() || undefined : undefined,
-      exigeOC:             cOC >= 0    ? ['sim','s','yes','1','true'].includes(String(row[cOC] ?? '').toLowerCase()) || undefined : undefined,
       observacoes:         cObs >= 0   ? String(row[cObs] ?? '').trim() || undefined : undefined,
       status: cStat >= 0 ? parseStatus(String(row[cStat] ?? '')) : 'em_aberto',
       _empresa: empresa,
@@ -235,6 +240,13 @@ function escapeHtml(v: string) {
   return v.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
 }
 function textToHtml(v: string) { return escapeHtml(v).replace(/\n/g,'<br>'); }
+
+function buildEmailHtml(body: string, docUrl?: string | null): string {
+  const docBtn = docUrl
+    ? `<div style="text-align:center;margin:28px 0;"><a href="${docUrl}" target="_blank" style="display:inline-block;padding:14px 28px;background:#4f46e5;color:#fff;text-decoration:none;border-radius:12px;font-weight:700;">📄 Acesse aqui o documento</a></div>`
+    : '';
+  return `<div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:40px;border:1px solid #f0f0f0;border-radius:24px;background:#fff;"><h1 style="color:#1a1a1a;font-size:24px;font-weight:300;margin-bottom:4px;">Lembrete de <strong style="color:#4f46e5;font-weight:800;">Cobrança</strong></h1><hr style="border:0;border-top:1px solid #f1f5f9;margin:24px 0;"><div style="line-height:1.7;color:#475569;font-size:15px;">${textToHtml(body)}</div>${docBtn}<div style="margin-top:32px;padding:16px;background:#f8fafc;border-radius:12px;text-align:center;border:1px dashed #e2e8f0;"><p style="font-size:13px;color:#64748b;margin:0;">⚠️ Realize o pagamento até o vencimento para evitar juros.</p></div><hr style="border:0;border-top:1px solid #f1f5f9;margin:32px 0;"><p style="text-align:center;font-size:12px;color:#94a3b8;">Comunicado oficial enviado por <strong style="color:#1e293b;">DigAI</strong>.</p></div>`;
+}
 
 // ─────────────────────────────────────────────────
 // Component
@@ -260,10 +272,6 @@ export default function CobrancasView({ user }: CobrancasViewProps) {
   const [addVenc, setAddVenc] = useState('');
   const [addValor, setAddValor] = useState('');
   const [addCateg, setAddCateg] = useState('');
-  const [addForma, setAddForma] = useState('');
-  const [addConta, setAddConta] = useState('');
-  const [addCC, setAddCC] = useState('');
-  const [addOC, setAddOC] = useState(false);
   const [addStatus, setAddStatus] = useState<Cobranca['status']>('em_aberto');
   const [addObs, setAddObs] = useState('');
 
@@ -274,6 +282,17 @@ export default function CobrancasView({ user }: CobrancasViewProps) {
   const [importYear, setImportYear] = useState(String(new Date().getFullYear()));
   const [preview, setPreview] = useState<PreviewRow[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Bulk billing modal
+  const [isBulkOpen, setIsBulkOpen] = useState(false);
+  const [bulkStep, setBulkStep] = useState<'clients' | 'data'>('clients');
+  const [bulkSelectedClients, setBulkSelectedClients] = useState<Set<string>>(new Set());
+  const [bulkClientSearch, setBulkClientSearch] = useState('');
+  const [bulkCompetencia, setBulkCompetencia] = useState('');
+  const [bulkClientData, setBulkClientData] = useState<Record<string, BulkClientForm>>({});
+  const [bulkExpandedClient, setBulkExpandedClient] = useState<string | null>(null);
+  const [isBulkSaving, setIsBulkSaving] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<{ sent: number; failed: number; total: number } | null>(null);
 
   // Email modal
   const [isEmailOpen, setIsEmailOpen] = useState(false);
@@ -322,17 +341,33 @@ export default function CobrancasView({ user }: CobrancasViewProps) {
   }, [cobrancas, statusFilter, searchTerm, clients]);
 
   // ── Add cobrança ──
+  const clientNextDueDate = (cl: Client): string => {
+    if (!cl.dueDay) return '';
+    const today = new Date();
+    let d = new Date(today.getFullYear(), today.getMonth(), cl.dueDay);
+    if (d <= today) d = new Date(today.getFullYear(), today.getMonth() + 1, cl.dueDay);
+    return d.toISOString().split('T')[0];
+  };
+
+  const currentCompetencia = (): string => {
+    const now = new Date();
+    return `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+  };
+
   const handleClientSelect = (id: string) => {
     setAddClientId(id);
     const cl = clientInfo(id);
-    if (cl?.dueDay && !addVenc) {
-      const today = new Date();
-      const yr = today.getFullYear();
-      const mo = today.getMonth();
-      let d = new Date(yr, mo, cl.dueDay);
-      if (d <= today) d = new Date(yr, mo + 1, cl.dueDay);
-      setAddVenc(d.toISOString().split('T')[0]);
+    if (!cl) return;
+    if (cl.descricaoPadrao) setAddDesc(cl.descricaoPadrao);
+    if (cl.categoriaFinanceira) setAddCateg(cl.categoriaFinanceira);
+    if (cl.valoresParcelas && cl.valoresParcelas.length > 0) {
+      setAddValor(String(cl.valoresParcelas[0]));
+    } else if (cl.defaultAmount) {
+      setAddValor(String(cl.defaultAmount));
     }
+    if (!addComp) setAddComp(currentCompetencia());
+    const venc = clientNextDueDate(cl);
+    if (venc && !addVenc) setAddVenc(venc);
   };
 
   const handleAddSubmit = async (e: React.FormEvent) => {
@@ -349,10 +384,6 @@ export default function CobrancasView({ user }: CobrancasViewProps) {
       dataVencimento: addVenc,
       valor: parseMoney(addValor),
       categoriaFinanceira: addCateg || undefined,
-      formaRecebimento: addForma || undefined,
-      contaBancaria: addConta || undefined,
-      centroCusto: addCC || undefined,
-      exigeOC: addOC || undefined,
       observacoes: addObs || undefined,
       status: addStatus,
     };
@@ -362,8 +393,7 @@ export default function CobrancasView({ user }: CobrancasViewProps) {
       setCobrancas(prev => [cob, ...prev]);
       setIsAddOpen(false);
       setAddClientId(''); setAddDesc(''); setAddComp(''); setAddVenc(''); setAddValor('');
-      setAddCateg(''); setAddForma(''); setAddConta(''); setAddCC('');
-      setAddOC(false); setAddStatus('em_aberto'); setAddObs('');
+      setAddCateg(''); setAddStatus('em_aberto'); setAddObs('');
     } catch (err: any) {
       toast.error('Erro ao salvar', err?.message || 'Erro desconhecido.');
     }
@@ -411,10 +441,6 @@ export default function CobrancasView({ user }: CobrancasViewProps) {
       dataVencimento: r.dataVencimento ?? '',
       valor: r.valor ?? 0,
       categoriaFinanceira: r.categoriaFinanceira,
-      formaRecebimento: r.formaRecebimento,
-      contaBancaria: r.contaBancaria,
-      centroCusto: r.centroCusto,
-      exigeOC: r.exigeOC,
       observacoes: r.observacoes,
       status: (r.status ?? 'em_aberto') as CobrancaStatus,
     }));
@@ -432,8 +458,8 @@ export default function CobrancasView({ user }: CobrancasViewProps) {
   };
 
   const handleDownloadTemplate = () => {
-    const hdrs = ['Cliente/Empresa *','CNPJ/CPF','Competência (MM/AAAA) *','Data Vencimento (DD/MM/AAAA) *','Valor *','Descrição do Serviço','Categoria Financeira','Forma de Recebimento','Conta Bancária','Centro de Custo','Exige OC (Sim/Não)','Status','Observações'];
-    const ex = ['GoBigger','30.110.179/0001-09','08/2026','19/08/2026','85,83','Mensalidade','Mensalidade','Boleto','Bradesco','TI','Não','Em aberto',''];
+    const hdrs = ['Cliente/Empresa *','CNPJ/CPF','Competência (MM/AAAA) *','Data Vencimento (DD/MM/AAAA) *','Valor *','Descrição do Serviço','Categoria Financeira','Status','Observações'];
+    const ex = ['GoBigger','30.110.179/0001-09','08/2026','19/08/2026','85,83','Mensalidade','Mensalidade','Em aberto',''];
     const ws = XLSX.utils.aoa_to_sheet([hdrs, ex]);
     ws['!cols'] = hdrs.map(() => ({ wch: 26 }));
     const wb = XLSX.utils.book_new();
@@ -474,7 +500,7 @@ export default function CobrancasView({ user }: CobrancasViewProps) {
   const buildBody = (cob: Cobranca, cl: Client, contactName: string) => {
     const empresa = cl.nomeFantasia || cl.name || cob.clienteNome || '';
     const dt = new Date(cob.dataVencimento).toLocaleDateString('pt-BR');
-    return `Olá${contactName ? ' ' + contactName : ''},\n\nGostaríamos de lembrar sobre o pagamento referente aos serviços prestados.\n\nEmpresa: ${empresa}\nDescrição: ${cob.descricao}\nCompetência: ${compDisplay(cob.competencia)}\nVencimento: ${dt}\nValor: ${moneyFmt.format(cob.valor)}${cob.formaRecebimento ? `\nForma: ${cob.formaRecebimento}` : ''}\n\nPedimos a programação do pagamento até a data de vencimento.\n\nAtenciosamente,\nDigAI`;
+    return `Olá${contactName ? ' ' + contactName : ''},\n\nGostaríamos de lembrar sobre o pagamento referente aos serviços prestados.\n\nEmpresa: ${empresa}\nDescrição: ${cob.descricao}\nCompetência: ${compDisplay(cob.competencia)}\nVencimento: ${dt}\nValor: ${moneyFmt.format(cob.valor)}\n\nPedimos a programação do pagamento até a data de vencimento.\n\nAtenciosamente,\nDigAI`;
   };
 
   const handleOpenEmail = (cob: Cobranca) => {
@@ -505,8 +531,7 @@ export default function CobrancasView({ user }: CobrancasViewProps) {
         setIsUploading(false);
       }
 
-      const docBtn = resolvedUrl ? `<div style="text-align:center;margin:28px 0;"><a href="${resolvedUrl}" target="_blank" style="display:inline-block;padding:14px 28px;background:#4f46e5;color:#fff;text-decoration:none;border-radius:12px;font-weight:700;">📄 Acesse aqui o documento</a></div>` : '';
-      const html = `<div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:40px;border:1px solid #f0f0f0;border-radius:24px;background:#fff;"><h1 style="color:#1a1a1a;font-size:24px;font-weight:300;margin-bottom:4px;">Lembrete de <strong style="color:#4f46e5;font-weight:800;">Cobrança</strong></h1><hr style="border:0;border-top:1px solid #f1f5f9;margin:24px 0;"><div style="line-height:1.7;color:#475569;font-size:15px;">${textToHtml(emailBody)}</div>${docBtn}<div style="margin-top:32px;padding:16px;background:#f8fafc;border-radius:12px;text-align:center;border:1px dashed #e2e8f0;"><p style="font-size:13px;color:#64748b;margin:0;">⚠️ Realize o pagamento até o vencimento para evitar juros.</p></div><hr style="border:0;border-top:1px solid #f1f5f9;margin:32px 0;"><p style="text-align:center;font-size:12px;color:#94a3b8;">Comunicado oficial enviado por <strong style="color:#1e293b;">DigAI</strong>.</p></div>`;
+      const html = buildEmailHtml(emailBody, resolvedUrl);
 
       await ResendService.sendEmail({ to: emailTo, subject: emailSubject, html });
       setIsEmailOpen(false);
@@ -516,6 +541,138 @@ export default function CobrancasView({ user }: CobrancasViewProps) {
     } catch (err: any) {
       toast.error('Erro ao enviar', err?.message || 'Erro desconhecido.');
       setIsSending(false);
+    }
+  };
+
+  // ── Bulk billing ──
+  const resetBulk = () => {
+    setBulkStep('clients'); setBulkSelectedClients(new Set()); setBulkClientSearch('');
+    setBulkCompetencia(currentCompetencia()); setBulkClientData({}); setBulkExpandedClient(null);
+    setBulkProgress(null);
+  };
+
+  const toggleBulkClient = (id: string) => {
+    setBulkSelectedClients(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const filteredBulkClients = clients.filter(c => {
+    if (!bulkClientSearch) return true;
+    const t = bulkClientSearch.toLowerCase();
+    return (c.nomeFantasia || c.name).toLowerCase().includes(t) || c.document?.includes(t);
+  });
+
+  const allBulkSelected = filteredBulkClients.length > 0 && filteredBulkClients.every(c => bulkSelectedClients.has(c.id));
+
+  const toggleAllBulk = () => {
+    if (allBulkSelected) setBulkSelectedClients(new Set());
+    else setBulkSelectedClients(new Set(filteredBulkClients.map(c => c.id)));
+  };
+
+  const isClientFormComplete = (form: BulkClientForm) =>
+    !!form.descricao && !!form.dataVencimento && parseMoney(form.valor) > 0;
+
+  const allClientsComplete = () =>
+    clients.filter(c => bulkSelectedClients.has(c.id))
+      .every(c => isClientFormComplete(bulkClientData[c.id] ?? emptyBulkForm()));
+
+  const updateClientField = <K extends keyof BulkClientForm>(clientId: string, field: K, value: BulkClientForm[K]) => {
+    setBulkClientData(prev => ({ ...prev, [clientId]: { ...(prev[clientId] ?? emptyBulkForm()), [field]: value } }));
+  };
+
+  const renderBulkForm = (form: BulkClientForm, onChange: <K extends keyof BulkClientForm>(f: K, v: BulkClientForm[K]) => void) => (
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Descrição *</label>
+          <input type="text" value={form.descricao} onChange={e => onChange('descricao', e.target.value)} placeholder="Ex: Mensalidade"
+            className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Data de Vencimento *</label>
+          <input type="date" value={form.dataVencimento} onChange={e => onChange('dataVencimento', e.target.value)}
+            className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50" />
+        </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Valor (R$) *</label>
+          <input type="number" step="0.01" min="0" value={form.valor} onChange={e => onChange('valor', e.target.value)} placeholder="0,00"
+            className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Categoria Financeira</label>
+          <select value={form.categoriaFinanceira} onChange={e => onChange('categoriaFinanceira', e.target.value)}
+            className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50">
+            <option value="">Selecione...</option>
+            {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Observações</label>
+        <textarea rows={2} value={form.observacoes} onChange={e => onChange('observacoes', e.target.value)} placeholder="Informações adicionais..."
+          className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 resize-none" />
+      </div>
+    </div>
+  );
+
+  const handleBulkCreate = async (sendEmails: boolean) => {
+    if (bulkSelectedClients.size === 0 || !allClientsComplete()) return;
+    setIsBulkSaving(true);
+    const selectedList = clients.filter(c => bulkSelectedClients.has(c.id));
+    const now = Date.now();
+    const newCobs: Cobranca[] = selectedList.map((cl, i) => {
+      const form = bulkClientData[cl.id] ?? emptyBulkForm();
+      return {
+        id: `${now}-${i}-${Math.random().toString(36).slice(2)}`,
+        tenantId,
+        clientId: cl.id,
+        clienteNome: cl.nomeFantasia || cl.name,
+        descricao: form.descricao,
+        competencia: bulkCompetencia,
+        dataVencimento: form.dataVencimento,
+        valor: parseMoney(form.valor),
+        categoriaFinanceira: form.categoriaFinanceira || undefined,
+        observacoes: form.observacoes || undefined,
+        status: form.status,
+      };
+    });
+
+    try {
+      await addCobrancas(tenantId, newCobs);
+      setCobrancas(prev => [...newCobs, ...prev]);
+
+      if (sendEmails) {
+        setBulkProgress({ sent: 0, failed: 0, total: newCobs.length });
+        let sent = 0; let failed = 0;
+        for (let i = 0; i < newCobs.length; i++) {
+          const cob = newCobs[i];
+          const cl = selectedList[i];
+          const cts = getClientContactList(cl);
+          if (cts.length === 0) { failed++; setBulkProgress({ sent, failed: ++failed - 1, total: newCobs.length }); continue; }
+          try {
+            const subject = `Lembrete de Pagamento — ${cob.descricao}${cob.competencia ? ' ' + compDisplay(cob.competencia) : ''}`;
+            const body = buildBody(cob, cl, cts[0].name);
+            await ResendService.sendEmail({ to: cts[0].email, subject, html: buildEmailHtml(body) });
+            sent++;
+          } catch { failed++; }
+          setBulkProgress({ sent, failed, total: newCobs.length });
+        }
+        toast.success('Cobranças criadas!', `${newCobs.length} cobranças salvas. E-mails: ${sent} enviados${failed > 0 ? `, ${failed} sem e-mail cadastrado` : ''}.`);
+      } else {
+        toast.success('Cobranças criadas!', `${newCobs.length} cobranças salvas com sucesso.`);
+      }
+
+      setIsBulkOpen(false);
+      resetBulk();
+    } catch (err: any) {
+      toast.error('Erro ao criar cobranças', err?.message || 'Erro desconhecido.');
+    } finally {
+      setIsBulkSaving(false);
     }
   };
 
@@ -541,13 +698,20 @@ export default function CobrancasView({ user }: CobrancasViewProps) {
             Contas a receber — controle de títulos por competência e status.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => { setIsImportOpen(true); setImportStep('upload'); setPreview([]); }}
             className="inline-flex items-center justify-center gap-2 px-4 py-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm font-medium rounded-xl transition-colors"
           >
             <UploadCloud className="w-4 h-4" />
             Importar
+          </button>
+          <button
+            onClick={() => { resetBulk(); setIsBulkOpen(true); }}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 border border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-sm font-medium rounded-xl transition-colors"
+          >
+            <Send className="w-4 h-4" />
+            Cobrança em Lote
           </button>
           <button
             onClick={() => setIsAddOpen(true)}
@@ -615,7 +779,7 @@ export default function CobrancasView({ user }: CobrancasViewProps) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
-                  {['Empresa', 'Competência', 'Vencimento', 'Valor', 'Descrição', 'Categoria', 'Forma', 'Status', ''].map(h => (
+                  {['Empresa', 'Competência', 'Vencimento', 'Valor', 'Descrição', 'Categoria', 'Status', ''].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -650,9 +814,6 @@ export default function CobrancasView({ user }: CobrancasViewProps) {
                       </td>
                       <td className="px-4 py-3 text-slate-500 dark:text-slate-400 whitespace-nowrap">
                         {cob.categoriaFinanceira || '—'}
-                      </td>
-                      <td className="px-4 py-3 text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                        {cob.formaRecebimento || '—'}
                       </td>
                       <td className="px-4 py-3">
                         <select
@@ -710,11 +871,11 @@ export default function CobrancasView({ user }: CobrancasViewProps) {
       {/* ── ADD MODAL ── */}
       <AnimatePresence>
         {isAddOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[100]">
             <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
               onClick={() => setIsAddOpen(false)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
-            <motion.div initial={{ opacity:0, scale:0.95, y:20 }} animate={{ opacity:1, scale:1, y:0 }} exit={{ opacity:0, scale:0.95, y:20 }}
-              className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 max-h-[92vh] flex flex-col">
+            <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
+              className="relative w-screen h-screen max-w-none sm:max-w-none top-0 left-0 translate-x-0 translate-y-0 bg-white dark:bg-slate-900 rounded-none shadow-2xl flex flex-col">
 
               <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between flex-shrink-0">
                 <h2 className="text-xl font-bold text-slate-900 dark:text-white">Nova Cobrança</h2>
@@ -777,49 +938,18 @@ export default function CobrancasView({ user }: CobrancasViewProps) {
                         {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Forma de Recebimento</label>
-                      <select value={addForma} onChange={e => setAddForma(e.target.value)}
-                        className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50">
-                        <option value="">Selecione...</option>
-                        {FORMAS.map(f => <option key={f} value={f}>{f}</option>)}
-                      </select>
-                    </div>
                   </div>
 
-                  {/* Conta + CC */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Conta Bancária</label>
-                      <input type="text" value={addConta} onChange={e => setAddConta(e.target.value)}
-                        placeholder="Ex: Bradesco"
-                        className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Centro de Custo</label>
-                      <input type="text" value={addCC} onChange={e => setAddCC(e.target.value)}
-                        placeholder="Ex: TI"
-                        className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50" />
-                    </div>
-                  </div>
-
-                  {/* Status + OC */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Status *</label>
-                      <select value={addStatus} onChange={e => setAddStatus(e.target.value as Cobranca['status'])}
-                        className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50">
-                        <option value="em_aberto">Em aberto</option>
-                        <option value="pago">Pago</option>
-                        <option value="vencido">Vencido</option>
-                        <option value="cancelado">Cancelado</option>
-                      </select>
-                    </div>
-                    <div className="flex items-center gap-3 pb-2">
-                      <input type="checkbox" id="addOC" checked={addOC} onChange={e => setAddOC(e.target.checked)}
-                        className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
-                      <label htmlFor="addOC" className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer">Exige Ordem de Compra</label>
-                    </div>
+                  {/* Status */}
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Status *</label>
+                    <select value={addStatus} onChange={e => setAddStatus(e.target.value as Cobranca['status'])}
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50">
+                      <option value="em_aberto">Em aberto</option>
+                      <option value="pago">Pago</option>
+                      <option value="vencido">Vencido</option>
+                      <option value="cancelado">Cancelado</option>
+                    </select>
                   </div>
 
                   {/* Observações */}
@@ -850,12 +980,12 @@ export default function CobrancasView({ user }: CobrancasViewProps) {
       {/* ── IMPORT MODAL ── */}
       <AnimatePresence>
         {isImportOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[100]">
             <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
               onClick={() => { if (importStep === 'upload') setIsImportOpen(false); }}
               className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
-            <motion.div initial={{ opacity:0, scale:0.95, y:20 }} animate={{ opacity:1, scale:1, y:0 }} exit={{ opacity:0, scale:0.95, y:20 }}
-              className="relative w-full max-w-4xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 max-h-[92vh] flex flex-col">
+            <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
+              className="relative w-screen h-screen max-w-none sm:max-w-none top-0 left-0 translate-x-0 translate-y-0 bg-white dark:bg-slate-900 rounded-none shadow-2xl flex flex-col">
 
               <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between flex-shrink-0">
                 <div>
@@ -987,15 +1117,251 @@ export default function CobrancasView({ user }: CobrancasViewProps) {
         )}
       </AnimatePresence>
 
+      {/* ── BULK BILLING MODAL ── */}
+      <AnimatePresence>
+        {isBulkOpen && (
+          <div className="fixed inset-0 z-[100]">
+            <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
+              onClick={() => { if (!isBulkSaving) { setIsBulkOpen(false); resetBulk(); } }}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
+            <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
+              className="relative w-screen h-screen max-w-none sm:max-w-none top-0 left-0 translate-x-0 translate-y-0 bg-white dark:bg-slate-900 rounded-none shadow-2xl flex flex-col">
+
+              {/* Header */}
+              <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between flex-shrink-0">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-900 dark:text-white">Cobrança em Lote</h2>
+                  <div className="flex items-center gap-3 mt-2">
+                    {(['clients', 'data'] as const).map((s, i) => (
+                      <div key={s} className="flex items-center gap-2">
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${bulkStep === s || (s === 'clients' && bulkStep === 'data') ? 'bg-indigo-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-400'}`}>
+                          {i + 1}
+                        </div>
+                        <span className={`text-xs font-medium ${bulkStep === s ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`}>
+                          {s === 'clients' ? 'Selecionar Clientes' : 'Dados da Cobrança'}
+                        </span>
+                        {i === 0 && <span className="text-slate-300 dark:text-slate-600">→</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <button onClick={() => { if (!isBulkSaving) { setIsBulkOpen(false); resetBulk(); } }} disabled={isBulkSaving}
+                  className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl disabled:opacity-50">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Step 1 — Select Clients */}
+              {bulkStep === 'clients' && (
+                <>
+                  <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex-shrink-0">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input type="text" placeholder="Buscar cliente por nome ou CNPJ..."
+                        value={bulkClientSearch} onChange={e => setBulkClientSearch(e.target.value)}
+                        className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50" />
+                    </div>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto p-4 space-y-1">
+                    {/* Select all */}
+                    <label className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border border-slate-200 dark:border-slate-700 mb-2">
+                      <input type="checkbox" checked={allBulkSelected} onChange={toggleAllBulk}
+                        className="w-4 h-4 rounded accent-indigo-600 cursor-pointer" />
+                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                        {allBulkSelected ? 'Desmarcar todos' : 'Selecionar todos'} ({filteredBulkClients.length})
+                      </span>
+                    </label>
+
+                    {filteredBulkClients.length === 0 && (
+                      <p className="text-center text-sm text-slate-400 py-8">Nenhum cliente encontrado.</p>
+                    )}
+
+                    {filteredBulkClients.map(cl => {
+                      const cts = getClientContactList(cl);
+                      const hasEmail = cts.length > 0;
+                      return (
+                        <label key={cl.id} className={`flex items-start gap-3 px-3 py-3 rounded-xl cursor-pointer transition-colors border ${
+                          bulkSelectedClients.has(cl.id)
+                            ? 'bg-indigo-50 dark:bg-indigo-500/10 border-indigo-300 dark:border-indigo-600'
+                            : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-800'
+                        }`}>
+                          <input type="checkbox" checked={bulkSelectedClients.has(cl.id)} onChange={() => toggleBulkClient(cl.id)}
+                            className="w-4 h-4 rounded accent-indigo-600 cursor-pointer mt-0.5 flex-shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{cl.nomeFantasia || cl.name}</p>
+                              {!hasEmail && (
+                                <span className="text-xs text-amber-500 flex-shrink-0">⚠ sem e-mail</span>
+                              )}
+                            </div>
+                            {cl.document && <p className="text-xs text-slate-400 font-mono">{cl.document}</p>}
+                            {cts.map((ct, i) => (
+                              <p key={i} className="text-xs text-slate-400">✉ {ct.email}</p>
+                            ))}
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+
+                  <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex items-center justify-between gap-2 flex-shrink-0">
+                    <span className="text-sm text-slate-500 dark:text-slate-400">
+                      {bulkSelectedClients.size} cliente(s) selecionado(s)
+                    </span>
+                    <button
+                      onClick={() => {
+                        const init: Record<string, BulkClientForm> = {};
+                        clients.filter((c: Client) => bulkSelectedClients.has(c.id)).forEach((cl: Client) => {
+                          const valorInit = cl.valoresParcelas && cl.valoresParcelas.length > 0
+                            ? String(cl.valoresParcelas[0])
+                            : cl.defaultAmount ? String(cl.defaultAmount) : '';
+                          init[cl.id] = {
+                            descricao: cl.descricaoPadrao || '',
+                            dataVencimento: clientNextDueDate(cl),
+                            valor: valorInit,
+                            categoriaFinanceira: cl.categoriaFinanceira || '',
+                            status: 'em_aberto',
+                            observacoes: '',
+                          };
+                        });
+                        setBulkClientData(init);
+                        setBulkStep('data');
+                      }}
+                      disabled={bulkSelectedClients.size === 0}
+                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-colors"
+                    >
+                      Próximo →
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {/* Step 2 — Preview + confirm */}
+              {bulkStep === 'data' && (() => {
+                const selectedList = clients.filter(c => bulkSelectedClients.has(c.id));
+                const readyCount = selectedList.filter(cl => isClientFormComplete(bulkClientData[cl.id] ?? emptyBulkForm())).length;
+                const missingCount = selectedList.length - readyCount;
+                return (
+                  <>
+                    {/* Competência global */}
+                    <div className="px-6 pt-5 pb-3 flex-shrink-0 border-b border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center gap-3">
+                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap">Competência</label>
+                        <input type="text" value={bulkCompetencia} onChange={e => setBulkCompetencia(e.target.value)}
+                          placeholder="MM/AAAA"
+                          className="w-36 px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50" />
+                        <span className="text-xs text-slate-400">Mês de referência aplicado a todas as cobranças</span>
+                      </div>
+                    </div>
+
+                    {/* Client list */}
+                    <div className="flex-1 overflow-y-auto">
+                      <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {selectedList.map(cl => {
+                          const form = bulkClientData[cl.id] ?? emptyBulkForm();
+                          const complete = isClientFormComplete(form);
+                          const isOpen = bulkExpandedClient === cl.id;
+                          return (
+                            <div key={cl.id}>
+                              <button type="button"
+                                onClick={() => setBulkExpandedClient(isOpen ? null : cl.id)}
+                                className="w-full flex items-center gap-4 px-6 py-4 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors text-left">
+                                <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${complete ? 'bg-green-500' : 'bg-amber-400'}`} />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{cl.nomeFantasia || cl.name}</p>
+                                  {complete ? (
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                                      {form.descricao}
+                                      {form.categoriaFinanceira ? ` · ${form.categoriaFinanceira}` : ''}
+                                      {form.dataVencimento ? ` · venc. ${new Date(form.dataVencimento + 'T00:00:00').toLocaleDateString('pt-BR')}` : ''}
+                                    </p>
+                                  ) : (
+                                    <p className="text-xs text-amber-500">Dados incompletos — clique para preencher</p>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-3 flex-shrink-0">
+                                  {complete && (
+                                    <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                                      {moneyFmt.format(parseMoney(form.valor))}
+                                    </span>
+                                  )}
+                                  <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                                </div>
+                              </button>
+                              {isOpen && (
+                                <div className="px-6 pb-5 bg-slate-50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800">
+                                  <div className="pt-4">
+                                    {renderBulkForm(form, (field, value) => updateClientField(cl.id, field, value))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Email progress */}
+                    {bulkProgress && (
+                      <div className="mx-6 mb-4 p-3 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-800 rounded-xl flex-shrink-0">
+                        <div className="flex justify-between text-xs text-indigo-700 dark:text-indigo-300 mb-2">
+                          <span>Enviando e-mails...</span>
+                          <span>{bulkProgress.sent + bulkProgress.failed} / {bulkProgress.total}</span>
+                        </div>
+                        <div className="w-full bg-indigo-200 dark:bg-indigo-800 rounded-full h-2">
+                          <div className="bg-indigo-600 h-2 rounded-full transition-all"
+                            style={{ width: `${((bulkProgress.sent + bulkProgress.failed) / bulkProgress.total) * 100}%` }} />
+                        </div>
+                        {bulkProgress.failed > 0 && (
+                          <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">{bulkProgress.failed} cliente(s) sem e-mail</p>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex items-center justify-between gap-2 flex-shrink-0">
+                      <div className="flex items-center gap-3">
+                        <button onClick={() => setBulkStep('clients')} disabled={isBulkSaving}
+                          className="px-4 py-2 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl disabled:opacity-50">
+                          ← Voltar
+                        </button>
+                        <span className="text-xs text-slate-500">
+                          <span className="text-green-600 font-semibold">{readyCount} pronto{readyCount !== 1 ? 's' : ''}</span>
+                          {missingCount > 0 && <span className="text-amber-500"> · {missingCount} incompleto{missingCount !== 1 ? 's' : ''}</span>}
+                        </span>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => handleBulkCreate(false)}
+                          disabled={isBulkSaving || !allClientsComplete()}
+                          className="px-4 py-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 text-slate-700 dark:text-slate-300 text-sm font-medium rounded-xl disabled:opacity-50 transition-colors">
+                          Salvar sem enviar
+                        </button>
+                        <button onClick={() => handleBulkCreate(true)}
+                          disabled={isBulkSaving || !allClientsComplete()}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-colors">
+                          {isBulkSaving
+                            ? <><Loader2 className="w-4 h-4 animate-spin" />Processando...</>
+                            : <><Send className="w-4 h-4" />Salvar e enviar e-mails</>}
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* ── EMAIL MODAL ── */}
       <AnimatePresence>
         {isEmailOpen && (
-          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[110]">
             <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
               onClick={() => { if (!isSending) { setIsEmailOpen(false); setDocFile(null); setDocUrl(null); } }}
               className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
-            <motion.div initial={{ opacity:0, scale:0.95, y:20 }} animate={{ opacity:1, scale:1, y:0 }} exit={{ opacity:0, scale:0.95, y:20 }}
-              className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 max-h-[90vh] flex flex-col">
+            <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
+              className="relative w-screen h-screen max-w-none sm:max-w-none top-0 left-0 translate-x-0 translate-y-0 bg-white dark:bg-slate-900 rounded-none shadow-2xl flex flex-col">
 
               <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between flex-shrink-0">
                 <h2 className="text-xl font-bold text-slate-900 dark:text-white">Enviar lembrete por e-mail</h2>
