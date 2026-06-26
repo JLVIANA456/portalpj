@@ -28,6 +28,8 @@ interface BulkClientForm {
   categoriaFinanceira: string;
   status: CobrancaStatus;
   observacoes: string;
+  tipoCobrar?: 'total' | 'parcela';
+  numeroParcela?: number;
 }
 
 const emptyBulkForm = (): BulkClientForm => ({
@@ -274,6 +276,8 @@ export default function CobrancasView({ user }: CobrancasViewProps) {
   const [addCateg, setAddCateg] = useState('');
   const [addStatus, setAddStatus] = useState<Cobranca['status']>('em_aberto');
   const [addObs, setAddObs] = useState('');
+  const [addTipoCobrar, setAddTipoCobrar] = useState<'total' | 'parcela'>('total');
+  const [addNumeroParcela, setAddNumeroParcela] = useState(1);
 
   // Import modal
   const [isImportOpen, setIsImportOpen] = useState(false);
@@ -361,9 +365,14 @@ export default function CobrancasView({ user }: CobrancasViewProps) {
     if (cl.descricaoPadrao) setAddDesc(cl.descricaoPadrao);
     if (cl.categoriaFinanceira) setAddCateg(cl.categoriaFinanceira);
     if (cl.valoresParcelas && cl.valoresParcelas.length > 0) {
+      setAddTipoCobrar('parcela');
+      setAddNumeroParcela(1);
       setAddValor(String(cl.valoresParcelas[0]));
     } else if (cl.defaultAmount) {
+      setAddTipoCobrar('total');
       setAddValor(String(cl.defaultAmount));
+    } else {
+      setAddTipoCobrar('total');
     }
     if (!addComp) setAddComp(currentCompetencia());
     const venc = clientNextDueDate(cl);
@@ -394,6 +403,7 @@ export default function CobrancasView({ user }: CobrancasViewProps) {
       setIsAddOpen(false);
       setAddClientId(''); setAddDesc(''); setAddComp(''); setAddVenc(''); setAddValor('');
       setAddCateg(''); setAddStatus('em_aberto'); setAddObs('');
+      setAddTipoCobrar('total'); setAddNumeroParcela(1);
     } catch (err: any) {
       toast.error('Erro ao salvar', err?.message || 'Erro desconhecido.');
     }
@@ -928,6 +938,56 @@ export default function CobrancasView({ user }: CobrancasViewProps) {
                     </div>
                   </div>
 
+                  {/* Seletor de parcela — aparece somente se o cliente tiver parcelas */}
+                  {(() => {
+                    const selCl = clientInfo(addClientId);
+                    if (!selCl?.valoresParcelas?.length) return null;
+                    const totalVal = selCl.defaultAmount
+                      ? String(selCl.defaultAmount)
+                      : String(selCl.valoresParcelas.reduce((s, v) => s + v, 0));
+                    return (
+                      <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
+                        <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Tipo de cobrança</p>
+                        <div className="flex gap-2">
+                          {(['total', 'parcela'] as const).map(t => (
+                            <button key={t} type="button"
+                              onClick={() => {
+                                setAddTipoCobrar(t);
+                                if (t === 'total') {
+                                  setAddValor(totalVal);
+                                } else {
+                                  setAddValor(String(selCl.valoresParcelas![addNumeroParcela - 1] ?? ''));
+                                }
+                              }}
+                              className={`px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors ${
+                                addTipoCobrar === t
+                                  ? 'bg-indigo-600 text-white border-indigo-600'
+                                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-600 hover:border-indigo-400'
+                              }`}
+                            >
+                              {t === 'total' ? 'Valor Total' : 'Parcela'}
+                            </button>
+                          ))}
+                        </div>
+                        {addTipoCobrar === 'parcela' && (
+                          <select
+                            value={addNumeroParcela}
+                            onChange={e => {
+                              const num = parseInt(e.target.value);
+                              setAddNumeroParcela(num);
+                              setAddValor(String(selCl.valoresParcelas![num - 1] ?? ''));
+                            }}
+                            className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                          >
+                            {selCl.valoresParcelas.map((v, i) => (
+                              <option key={i} value={i + 1}>Parcela {i + 1} — {moneyFmt.format(v)}</option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+                    );
+                  })()}
+
                   {/* Categoria + Forma */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
@@ -1213,8 +1273,9 @@ export default function CobrancasView({ user }: CobrancasViewProps) {
                       onClick={() => {
                         const init: Record<string, BulkClientForm> = {};
                         clients.filter((c: Client) => bulkSelectedClients.has(c.id)).forEach((cl: Client) => {
-                          const valorInit = cl.valoresParcelas && cl.valoresParcelas.length > 0
-                            ? String(cl.valoresParcelas[0])
+                          const hasParcelas = cl.valoresParcelas && cl.valoresParcelas.length > 0;
+                          const valorInit = hasParcelas
+                            ? String(cl.valoresParcelas![0])
                             : cl.defaultAmount ? String(cl.defaultAmount) : '';
                           init[cl.id] = {
                             descricao: cl.descricaoPadrao || '',
@@ -1223,6 +1284,8 @@ export default function CobrancasView({ user }: CobrancasViewProps) {
                             categoriaFinanceira: cl.categoriaFinanceira || '',
                             status: 'em_aberto',
                             observacoes: '',
+                            tipoCobrar: hasParcelas ? 'parcela' : 'total',
+                            numeroParcela: hasParcelas ? 1 : undefined,
                           };
                         });
                         setBulkClientData(init);
@@ -1273,6 +1336,7 @@ export default function CobrancasView({ user }: CobrancasViewProps) {
                                   {complete ? (
                                     <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
                                       {form.descricao}
+                                      {form.tipoCobrar === 'parcela' && form.numeroParcela ? ` · Parcela ${form.numeroParcela}` : ''}
                                       {form.categoriaFinanceira ? ` · ${form.categoriaFinanceira}` : ''}
                                       {form.dataVencimento ? ` · venc. ${new Date(form.dataVencimento + 'T00:00:00').toLocaleDateString('pt-BR')}` : ''}
                                     </p>
@@ -1291,7 +1355,56 @@ export default function CobrancasView({ user }: CobrancasViewProps) {
                               </button>
                               {isOpen && (
                                 <div className="px-6 pb-5 bg-slate-50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800">
-                                  <div className="pt-4">
+                                  <div className="pt-4 space-y-4">
+                                    {/* Seletor de tipo de cobrança — apenas clientes parcelados */}
+                                    {cl.valoresParcelas && cl.valoresParcelas.length > 0 && (() => {
+                                      const totalVal = cl.defaultAmount
+                                        ? String(cl.defaultAmount)
+                                        : String(cl.valoresParcelas!.reduce((s: number, v: number) => s + v, 0));
+                                      return (
+                                        <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
+                                          <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">Tipo de cobrança</p>
+                                          <div className="flex gap-2">
+                                            {(['total', 'parcela'] as const).map(t => (
+                                              <button key={t} type="button"
+                                                onClick={() => {
+                                                  updateClientField(cl.id, 'tipoCobrar', t);
+                                                  if (t === 'total') {
+                                                    updateClientField(cl.id, 'valor', totalVal);
+                                                    updateClientField(cl.id, 'numeroParcela', undefined);
+                                                  } else {
+                                                    const idx = (form.numeroParcela ?? 1) - 1;
+                                                    updateClientField(cl.id, 'valor', String(cl.valoresParcelas![idx] ?? ''));
+                                                  }
+                                                }}
+                                                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+                                                  (form.tipoCobrar ?? 'total') === t
+                                                    ? 'bg-indigo-600 text-white border-indigo-600'
+                                                    : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-600 hover:border-indigo-400'
+                                                }`}
+                                              >
+                                                {t === 'total' ? 'Valor Total' : 'Parcela'}
+                                              </button>
+                                            ))}
+                                          </div>
+                                          {form.tipoCobrar === 'parcela' && (
+                                            <select
+                                              value={form.numeroParcela ?? 1}
+                                              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                                                const num = parseInt(e.target.value);
+                                                updateClientField(cl.id, 'numeroParcela', num);
+                                                updateClientField(cl.id, 'valor', String(cl.valoresParcelas![num - 1] ?? ''));
+                                              }}
+                                              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                            >
+                                              {cl.valoresParcelas!.map((v: number, i: number) => (
+                                                <option key={i} value={i + 1}>Parcela {i + 1} — {moneyFmt.format(v)}</option>
+                                              ))}
+                                            </select>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
                                     {renderBulkForm(form, (field, value) => updateClientField(cl.id, field, value))}
                                   </div>
                                 </div>
