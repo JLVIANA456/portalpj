@@ -20,6 +20,7 @@ import ContasPagarView from './components/ContasPagarView';
 import ContasReceberView from './components/ContasReceberView';
 import NovoLancamentoView from './components/NovoLancamentoView';
 import NovoRecebimentoView from './components/NovoRecebimentoView';
+import CadastroSimplesView from './components/CadastroSimplesView';
 import FinanceiroView from './components/FinanceiroView';
 import EnviarNotasView from './components/EnviarNotasView';
 import EmissorNacionalModule from './components/emissor/Notadomilhão';
@@ -186,9 +187,13 @@ export default function App() {
       case 'contas_receber':
         return <ContasReceberView user={currentUser} onNavigate={changeTab} />;
       case 'novo_lancamento':
-        return <NovoLancamentoView user={currentUser} onSuccess={() => changeTab('contas_pagar')} />;
+        return <NovoLancamentoView user={currentUser} />;
       case 'novo_recebimento':
-        return <NovoRecebimentoView user={currentUser} onSuccess={() => changeTab('contas_receber')} />;
+        return <NovoRecebimentoView user={currentUser} />;
+      case 'cadastro_categoria':
+        return <CadastroSimplesView user={currentUser} tipo="categoria" />;
+      case 'cadastro_centro_custo':
+        return <CadastroSimplesView user={currentUser} tipo="centro_custo" />;
       case 'enviar_notas_email':
         return <EnviarNotasView user={currentUser} />;
       case 'whatsapp':

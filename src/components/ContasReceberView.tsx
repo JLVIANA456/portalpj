@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import { ContaReceber, PJUser } from '../types';
 import { deleteContaReceber, getContasReceber, updateContaReceber } from '../lib/db';
+import ConfirmDialog from './ConfirmDialog';
 
 // ─────────────────────────────────────────────────────────
 //  TYPES
@@ -1068,8 +1069,14 @@ export default function ContasReceberView({ user, onNavigate }: ContasReceberVie
     } catch (err: any) { setError(err?.message || 'Erro ao reabrir cobrança.'); }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Deseja excluir esta conta a receber?')) return;
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const handleDelete = (id: string) => setConfirmDeleteId(id);
+
+  const doDelete = async () => {
+    const id = confirmDeleteId;
+    if (!id) return;
+    setConfirmDeleteId(null);
     setError(''); setSuccess('');
     try {
       await deleteContaReceber(id);
@@ -1178,6 +1185,13 @@ export default function ContasReceberView({ user, onNavigate }: ContasReceberVie
       <StepFooterNav current={screen} onNavigate={goToStep} />
 
       <DetalheModal item={selectedItem} onClose={() => setSelectedItem(null)} onSave={handleEditSave} onDelete={handleDelete} />
+
+      <ConfirmDialog
+        open={!!confirmDeleteId}
+        message="Deseja excluir esta conta a receber?"
+        onConfirm={doDelete}
+        onCancel={() => setConfirmDeleteId(null)}
+      />
     </div>
   );
 }

@@ -138,6 +138,20 @@ export interface ContaPagar {
   createdAt: string;
 }
 
+export interface CategoriaFinanceira {
+  id: string;
+  tenantId: string;
+  nome: string;
+  createdAt: string;
+}
+
+export interface CentroCusto {
+  id: string;
+  tenantId: string;
+  nome: string;
+  createdAt: string;
+}
+
 export type ContaReceberStatus = 'pendente' | 'enviado' | 'vencido' | 'recebido' | 'cancelado';
 
 export interface ContaReceber {

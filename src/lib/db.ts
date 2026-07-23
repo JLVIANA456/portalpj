@@ -14,7 +14,9 @@ import {
   ContaPagar,
   ContaPagarStatus,
   ContaReceber,
-  ContaReceberStatus
+  ContaReceberStatus,
+  CategoriaFinanceira,
+  CentroCusto
 } from '../types';
 import { supabase } from './supabase';
 
@@ -713,6 +715,108 @@ export async function deleteContaReceber(id: string): Promise<boolean> {
   requireSupabaseFinanceiro();
   const { error } = await supabase.from('contas_receber').delete().eq('id', id);
   if (error) throw new Error(`Erro ao excluir conta a receber: ${error.message}`);
+  return true;
+}
+
+// ─────────────────────────────────────────────────────────
+//  CADASTROS FINANCEIROS — Categoria e Centro de Custo
+// ─────────────────────────────────────────────────────────
+
+const mapDbCategoria = (item: any): CategoriaFinanceira => ({
+  id: item.id,
+  tenantId: item.tenant_id || 'tenant-1',
+  nome: item.nome || '',
+  createdAt: item.criado_em || new Date().toISOString()
+});
+
+const mapDbCentroCusto = (item: any): CentroCusto => ({
+  id: item.id,
+  tenantId: item.tenant_id || 'tenant-1',
+  nome: item.nome || '',
+  createdAt: item.criado_em || new Date().toISOString()
+});
+
+export async function getCategorias(user: PJUser): Promise<CategoriaFinanceira[]> {
+  requireSupabaseFinanceiro();
+  let q = supabase.from('categorias_financeiras').select('*').order('nome', { ascending: true });
+  if (user.role !== 'super_admin') q = q.eq('tenant_id', user.tenantId || 'tenant-1');
+
+  const { data, error } = await q;
+  if (error) throw new Error(`Erro ao buscar categorias: ${error.message}`);
+  return (data || []).map(mapDbCategoria);
+}
+
+export async function addCategoria(user: PJUser, nome: string): Promise<CategoriaFinanceira> {
+  requireSupabaseFinanceiro();
+  const { data, error } = await supabase
+    .from('categorias_financeiras')
+    .insert({ tenant_id: user.tenantId || 'tenant-1', nome })
+    .select('*')
+    .single();
+
+  if (error) throw new Error(`Erro ao criar categoria: ${error.message}`);
+  return mapDbCategoria(data);
+}
+
+export async function updateCategoria(id: string, nome: string): Promise<CategoriaFinanceira> {
+  requireSupabaseFinanceiro();
+  const { data, error } = await supabase
+    .from('categorias_financeiras')
+    .update({ nome })
+    .eq('id', id)
+    .select('*')
+    .single();
+
+  if (error) throw new Error(`Erro ao atualizar categoria: ${error.message}`);
+  return mapDbCategoria(data);
+}
+
+export async function deleteCategoria(id: string): Promise<boolean> {
+  requireSupabaseFinanceiro();
+  const { error } = await supabase.from('categorias_financeiras').delete().eq('id', id);
+  if (error) throw new Error(`Erro ao excluir categoria: ${error.message}`);
+  return true;
+}
+
+export async function getCentrosCusto(user: PJUser): Promise<CentroCusto[]> {
+  requireSupabaseFinanceiro();
+  let q = supabase.from('centros_custo').select('*').order('nome', { ascending: true });
+  if (user.role !== 'super_admin') q = q.eq('tenant_id', user.tenantId || 'tenant-1');
+
+  const { data, error } = await q;
+  if (error) throw new Error(`Erro ao buscar centros de custo: ${error.message}`);
+  return (data || []).map(mapDbCentroCusto);
+}
+
+export async function addCentroCusto(user: PJUser, nome: string): Promise<CentroCusto> {
+  requireSupabaseFinanceiro();
+  const { data, error } = await supabase
+    .from('centros_custo')
+    .insert({ tenant_id: user.tenantId || 'tenant-1', nome })
+    .select('*')
+    .single();
+
+  if (error) throw new Error(`Erro ao criar centro de custo: ${error.message}`);
+  return mapDbCentroCusto(data);
+}
+
+export async function updateCentroCusto(id: string, nome: string): Promise<CentroCusto> {
+  requireSupabaseFinanceiro();
+  const { data, error } = await supabase
+    .from('centros_custo')
+    .update({ nome })
+    .eq('id', id)
+    .select('*')
+    .single();
+
+  if (error) throw new Error(`Erro ao atualizar centro de custo: ${error.message}`);
+  return mapDbCentroCusto(data);
+}
+
+export async function deleteCentroCusto(id: string): Promise<boolean> {
+  requireSupabaseFinanceiro();
+  const { error } = await supabase.from('centros_custo').delete().eq('id', id);
+  if (error) throw new Error(`Erro ao excluir centro de custo: ${error.message}`);
   return true;
 }
 

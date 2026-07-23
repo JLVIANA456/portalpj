@@ -17,6 +17,7 @@ import { PJUser, Client } from '../types';
 import { getClients } from '../lib/db';
 import { ResendService, uploadEmailDocument } from '../lib/resend';
 import { useToast } from '../lib/toast';
+import ConfirmDialog from './ConfirmDialog';
 
 interface EnviarNotasViewProps {
   user: PJUser;
@@ -206,8 +207,14 @@ DigAI`;
     }
   };
 
-  const handleDelete = (id: string) => {
-    if (window.confirm('Deseja excluir este registro?')) saveNotas(notas.filter(n => n.id !== id));
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const handleDelete = (id: string) => setConfirmDeleteId(id);
+
+  const doDelete = () => {
+    if (!confirmDeleteId) return;
+    saveNotas(notas.filter(n => n.id !== confirmDeleteId));
+    setConfirmDeleteId(null);
   };
 
   const filtered = notas.filter(n =>
@@ -496,6 +503,13 @@ DigAI`;
           </div>
         )}
       </AnimatePresence>
+
+      <ConfirmDialog
+        open={!!confirmDeleteId}
+        message="Deseja excluir este registro?"
+        onConfirm={doDelete}
+        onCancel={() => setConfirmDeleteId(null)}
+      />
     </div>
   );
 }

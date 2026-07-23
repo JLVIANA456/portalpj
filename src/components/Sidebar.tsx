@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { PJUser } from '../types';
 import {
   Home,
@@ -13,6 +13,7 @@ import {
   LogOut,
   ShieldCheck,
   Building2,
+  ChevronDown,
   X,
   ChevronLeft,
   ChevronRight,
@@ -25,8 +26,12 @@ import {
   BanknoteArrowUp,
   CircleDollarSign,
   Send,
-  ReceiptText
+  ReceiptText,
+  Tag,
+  Target
 } from 'lucide-react';
+
+const SECTIONS_COLLAPSE_KEY = 'portal_pj_sidebar_sections_collapsed';
 
 
 interface SidebarProps {
@@ -58,6 +63,25 @@ export default function Sidebar({
 }: SidebarProps) {
   const isAdmin = user.role === 'admin_tenant' || user.role === 'super_admin';
   const isSuperAdmin = user.role === 'super_admin';
+
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(SECTIONS_COLLAPSE_KEY) || '[]');
+      return new Set(Array.isArray(saved) ? saved : []);
+    } catch {
+      return new Set();
+    }
+  });
+
+  const toggleSection = (id: string) => {
+    setCollapsedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      localStorage.setItem(SECTIONS_COLLAPSE_KEY, JSON.stringify([...next]));
+      return next;
+    });
+  };
 
   // Otimização: Evita recriar a estrutura de navegação a cada render
   const menuSections = useMemo(() => [
@@ -93,12 +117,20 @@ export default function Sidebar({
       id: 'bpo_financeiro',
       title: 'BPO Financeiro',
       items: [
-        { id: 'financeiro', label: 'Financeiro', icon: CircleDollarSign },
         { id: 'novo_recebimento', label: 'Novo Recebimento', icon: CirclePlus },
-        { id: 'contas_receber', label: 'Contas a Receber', icon: BanknoteArrowUp },
         { id: 'novo_lancamento', label: 'Novo Lançamento', icon: CirclePlus },
+        { id: 'contas_receber', label: 'Contas a Receber', icon: BanknoteArrowUp },
         { id: 'contas_pagar', label: 'Contas a Pagar', icon: BanknoteArrowDown },
-        { id: 'conciliacao', label: 'Conciliação de Cartão de Crédito', icon: ArrowRightLeft }
+        { id: 'conciliacao', label: 'Conciliação de Cartão de Crédito', icon: ArrowRightLeft },
+        { id: 'financeiro', label: 'Financeiro', icon: CircleDollarSign }
+      ]
+    },
+    {
+      id: 'cadastros',
+      title: 'Cadastros',
+      items: [
+        { id: 'cadastro_categoria', label: 'Categoria', icon: Tag },
+        { id: 'cadastro_centro_custo', label: 'Centro de Custo', icon: Target }
       ]
     },
     {
@@ -209,17 +241,29 @@ export default function Sidebar({
 
         {/* Navigation list */}
         <nav className="flex-1 px-3 py-4 overflow-y-auto">
-          {menuSections.map((section, sIdx) => (
+          {menuSections.map((section, sIdx) => {
+            const isSectionCollapsed = section.title != null && collapsedSections.has(section.id);
+            return (
             <div key={section.id} className={sIdx > 0 ? 'mt-4' : ''}>
               {section.title && (
                 isCollapsed ? (
-                  <div className="mx-auto my-2 h-px w-8 bg-slate-800" />
+                  <button
+                    onClick={() => toggleSection(section.id)}
+                    aria-label={isSectionCollapsed ? `Expandir ${section.title}` : `Recolher ${section.title}`}
+                    className="mx-auto my-2 flex h-px w-8 items-center justify-center bg-slate-800 hover:bg-slate-700 cursor-pointer"
+                  />
                 ) : (
-                  <p className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                    {section.title}
-                  </p>
+                  <button
+                    onClick={() => toggleSection(section.id)}
+                    aria-expanded={!isSectionCollapsed}
+                    className="flex w-full items-center justify-between px-3 pb-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-slate-300 transition-colors cursor-pointer"
+                  >
+                    <span>{section.title}</span>
+                    <ChevronDown className={`h-3 w-3 shrink-0 transition-transform duration-200 ${isSectionCollapsed ? '-rotate-90' : ''}`} />
+                  </button>
                 )
               )}
+              {!isSectionCollapsed && (
               <div className="space-y-1.5">
                 {section.items.map((item) => {
                   const Icon = item.icon;
@@ -248,8 +292,10 @@ export default function Sidebar({
                   );
                 })}
               </div>
+              )}
             </div>
-          ))}
+            );
+          })}
         </nav>
 
         {/* Footer actions */}

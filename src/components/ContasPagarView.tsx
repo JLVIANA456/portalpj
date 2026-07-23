@@ -29,7 +29,8 @@ import {
   X
 } from 'lucide-react';
 import { ContaPagar, PJUser } from '../types';
-import { deleteContaPagar, getContasPagar, updateContaPagar } from '../lib/db';
+import { deleteContaPagar, getCategorias, getCentrosCusto, getContasPagar, updateContaPagar } from '../lib/db';
+import ConfirmDialog from './ConfirmDialog';
 
 // ─────────────────────────────────────────────────────────
 //  TYPES
@@ -54,13 +55,14 @@ type StatusConta = 'aberto' | 'vencido' | 'pago' | 'aprovacao' | 'aprovado' | 'p
 //  CONSTANTS
 // ─────────────────────────────────────────────────────────
 
-const CATEGORIAS = [
+// Listas padrão usadas como fallback até os cadastros (Categoria/Centro de Custo) carregarem do Supabase.
+const DEFAULT_CATEGORIAS = [
   'Administrativo', 'Aluguel', 'Banco e Tarifas', 'Contabilidade', 'Energia',
   'Fornecedor', 'Impostos', 'Marketing', 'Materiais', 'Pró-labore',
   'Salários', 'Sistema / Software', 'Telefonia / Internet', 'Terceiros', 'Outros'
 ];
 
-const CENTROS_CUSTO = [
+const DEFAULT_CENTROS_CUSTO = [
   'Administrativo', 'Comercial', 'Contábil', 'Departamento Pessoal', 'Diretoria',
   'Financeiro', 'Fiscal', 'Operacional', 'Qualidade', 'Tecnologia'
 ];
@@ -270,9 +272,11 @@ interface FiltersBarProps {
   categoriaFilter: string; setCategoriaFilter: (v: string) => void;
   centroFilter: string; setCentroFilter: (v: string) => void;
   monthFilter: string; setMonthFilter: (v: string) => void;
+  categorias: string[];
+  centrosCusto: string[];
 }
 
-function FiltersBar({ search, setSearch, statusFilter, setStatusFilter, categoriaFilter, setCategoriaFilter, centroFilter, setCentroFilter, monthFilter, setMonthFilter }: FiltersBarProps) {
+function FiltersBar({ search, setSearch, statusFilter, setStatusFilter, categoriaFilter, setCategoriaFilter, centroFilter, setCentroFilter, monthFilter, setMonthFilter, categorias, centrosCusto }: FiltersBarProps) {
   return (
     <Card className="p-4">
       <div className="flex items-center gap-2 mb-3">
@@ -298,12 +302,12 @@ function FiltersBar({ search, setSearch, statusFilter, setStatusFilter, categori
         {/* Categoria */}
         <select value={categoriaFilter} onChange={e => setCategoriaFilter(e.target.value)} className={inputCls}>
           <option value="todos">Todas categorias</option>
-          {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
+          {categorias.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
         {/* Centro de custo */}
         <select value={centroFilter} onChange={e => setCentroFilter(e.target.value)} className={inputCls}>
           <option value="todos">Todos centros</option>
-          {CENTROS_CUSTO.map(c => <option key={c} value={c}>{c}</option>)}
+          {centrosCusto.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
         {/* Mês */}
         <input
@@ -494,12 +498,14 @@ function OfxMatchPanel({
 
 interface DetalheModalProps {
   item: ContaPagar | null;
+  categorias: string[];
+  centrosCusto: string[];
   onClose: () => void;
   onSave: (id: string, updates: Partial<ContaPagar>) => Promise<void>;
   onDelete: (id: string) => void;
 }
 
-function DetalheModal({ item, onClose, onSave, onDelete }: DetalheModalProps) {
+function DetalheModal({ item, categorias, centrosCusto, onClose, onSave, onDelete }: DetalheModalProps) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<any>(null);
   const [saving, setSaving] = useState(false);
@@ -600,13 +606,13 @@ function DetalheModal({ item, onClose, onSave, onDelete }: DetalheModalProps) {
               <div>
                 <label className="mb-1 block text-xs font-bold text-slate-500">Categoria</label>
                 <select value={form.categoria} onChange={set('categoria')} className={inputCls}>
-                  {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
+                  {categorias.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div>
                 <label className="mb-1 block text-xs font-bold text-slate-500">Centro de custo</label>
                 <select value={form.centroCusto} onChange={set('centroCusto')} className={inputCls}>
-                  {CENTROS_CUSTO.map(c => <option key={c} value={c}>{c}</option>)}
+                  {centrosCusto.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div>
@@ -1013,6 +1019,10 @@ export default function ContasPagarView({ user, onNavigate }: ContasPagarViewPro
   // OFX
   const [ofxMatches, setOfxMatches] = useState<Array<{ entry: OfxEntry; item: ContaPagar; score: number }>>([]);
 
+  // Cadastros (Categoria / Centro de Custo)
+  const [categorias, setCategorias] = useState<string[]>(DEFAULT_CATEGORIAS);
+  const [centrosCusto, setCentrosCusto] = useState<string[]>(DEFAULT_CENTROS_CUSTO);
+
   // ── Data loading ──────────────────────────────────────
   const load = async () => {
     setLoading(true); setError('');
@@ -1022,6 +1032,11 @@ export default function ContasPagarView({ user, onNavigate }: ContasPagarViewPro
   };
 
   useEffect(() => { load(); }, [user.id, user.tenantId]);
+
+  useEffect(() => {
+    getCategorias(user).then(data => { if (data.length) setCategorias(data.map(c => c.nome)); }).catch(() => {});
+    getCentrosCusto(user).then(data => { if (data.length) setCentrosCusto(data.map(c => c.nome)); }).catch(() => {});
+  }, [user.id, user.tenantId]);
 
   // ── Derived data ──────────────────────────────────────
   const filtered = useMemo(() => {
@@ -1118,8 +1133,14 @@ export default function ContasPagarView({ user, onNavigate }: ContasPagarViewPro
     });
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Deseja excluir esta conta a pagar?')) return;
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const handleDelete = (id: string) => setConfirmDeleteId(id);
+
+  const doDelete = async () => {
+    const id = confirmDeleteId;
+    if (!id) return;
+    setConfirmDeleteId(null);
     setError(''); setSuccess('');
     try {
       await deleteContaPagar(id);
@@ -1275,6 +1296,7 @@ export default function ContasPagarView({ user, onNavigate }: ContasPagarViewPro
         categoriaFilter={categoriaFilter} setCategoriaFilter={setCategoriaFilter}
         centroFilter={centroFilter} setCentroFilter={setCentroFilter}
         monthFilter={monthFilter} setMonthFilter={setMonthFilter}
+        categorias={categorias} centrosCusto={centrosCusto}
       />
 
       {/* ── Tab content ── */}
@@ -1315,7 +1337,14 @@ export default function ContasPagarView({ user, onNavigate }: ContasPagarViewPro
       <StepFooterNav current={tab} onNavigate={goToStep} />
 
       {/* ── Modais ── */}
-      <DetalheModal item={selectedItem} onClose={() => setSelectedItem(null)} onSave={handleEditSave} onDelete={handleDelete} />
+      <DetalheModal item={selectedItem} categorias={categorias} centrosCusto={centrosCusto} onClose={() => setSelectedItem(null)} onSave={handleEditSave} onDelete={handleDelete} />
+
+      <ConfirmDialog
+        open={!!confirmDeleteId}
+        message="Deseja excluir esta conta a pagar?"
+        onConfirm={doDelete}
+        onCancel={() => setConfirmDeleteId(null)}
+      />
     </div>
   );
 }

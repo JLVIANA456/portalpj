@@ -6,6 +6,8 @@
 import React, { useState, useMemo } from 'react';
 import { PJUser, Invoice, InvoiceStatus } from '../types';
 import { updateInvoiceStatus, deleteInvoice } from '../lib/db';
+import { useToast } from '../lib/toast';
+import ConfirmDialog from './ConfirmDialog';
 import {
   Download,
   Search,
@@ -37,6 +39,7 @@ const MONTHS = [
 ];
 
 export default function HistoryView({ user, invoices, onUpdateInvoice }: HistoryViewProps) {
+  const toast = useToast();
   const isAdmin = user.role === 'admin_tenant' || user.role === 'super_admin';
 
   // Filters
@@ -169,8 +172,14 @@ export default function HistoryView({ user, invoices, onUpdateInvoice }: History
     }
   };
 
-  const handleDeleteAction = async (invId: string) => {
-    if (!window.confirm('Tem certeza de que deseja excluir esta nota? Esta ação é irreversível.')) return;
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const handleDeleteAction = (invId: string) => setConfirmDeleteId(invId);
+
+  const doDeleteAction = async () => {
+    const invId = confirmDeleteId;
+    if (!invId) return;
+    setConfirmDeleteId(null);
 
     const success = await deleteInvoice(invId);
     if (success) {
@@ -178,7 +187,7 @@ export default function HistoryView({ user, invoices, onUpdateInvoice }: History
       // Remove da seleção se estivesse selecionada
       setSelectedDocs(prev => prev.filter(id => id !== invId));
     } else {
-      alert('Ocorreu um erro ao excluir a nota. Tente novamente.');
+      toast.error('Erro ao excluir', 'Ocorreu um erro ao excluir a nota. Tente novamente.');
     }
   };
 
@@ -685,6 +694,13 @@ export default function HistoryView({ user, invoices, onUpdateInvoice }: History
           </motion.div>
         )}
       </AnimatePresence>
+
+      <ConfirmDialog
+        open={!!confirmDeleteId}
+        message="Tem certeza de que deseja excluir esta nota? Esta ação é irreversível."
+        onConfirm={doDeleteAction}
+        onCancel={() => setConfirmDeleteId(null)}
+      />
     </div>
   );
 }
