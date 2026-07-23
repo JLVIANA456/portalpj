@@ -7,6 +7,8 @@ import {
   Calendar,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   Download,
   Eye,
@@ -16,19 +18,18 @@ import {
   LayoutDashboard,
   ListChecks,
   Loader2,
+  Pencil,
   Plus,
-  Receipt,
   RefreshCw,
   Search,
   ShieldCheck,
   Trash2,
   TrendingDown,
-  UploadCloud,
   WalletCards,
   X
 } from 'lucide-react';
 import { ContaPagar, PJUser } from '../types';
-import { addContaPagar, deleteContaPagar, getContasPagar, updateContaPagar } from '../lib/db';
+import { deleteContaPagar, getContasPagar, updateContaPagar } from '../lib/db';
 
 // ─────────────────────────────────────────────────────────
 //  TYPES
@@ -36,6 +37,7 @@ import { addContaPagar, deleteContaPagar, getContasPagar, updateContaPagar } fro
 
 interface ContasPagarViewProps {
   user: PJUser;
+  onNavigate?: (tab: string) => void;
 }
 
 interface OfxEntry {
@@ -47,21 +49,6 @@ interface OfxEntry {
 
 type TabKey = 'dashboard' | 'contas' | 'kanban' | 'fluxo' | 'relatorios';
 type StatusConta = 'aberto' | 'vencido' | 'pago' | 'aprovacao' | 'aprovado' | 'programado';
-
-type FormState = {
-  fornecedor: string;
-  categoria: string;
-  descricao: string;
-  valor: string;
-  dataVencimento: string;
-  observacoes: string;
-  competencia: string;
-  centroCusto: string;
-  numeroDocumento: string;
-  dataEmissao: string;
-  formaPagamento: string;
-  status: StatusConta;
-};
 
 // ─────────────────────────────────────────────────────────
 //  CONSTANTS
@@ -90,14 +77,6 @@ const STATUS_LABEL: Record<string, string> = {
   aprovado: 'Aprovado',
   programado: 'Programado'
 };
-
-const TABS = [
-  { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { key: 'contas', label: 'Contas', icon: ListChecks },
-  { key: 'kanban', label: 'Aprovações', icon: ShieldCheck },
-  { key: 'fluxo', label: 'Fluxo de Caixa', icon: TrendingDown },
-  { key: 'relatorios', label: 'Relatórios', icon: BarChart3 }
-] as const;
 
 const KANBAN_COLUMNS: Array<{ key: StatusConta; title: string; text: string }> = [
   { key: 'aprovacao', title: 'Em aprovação', text: 'Despesas aguardando validação' },
@@ -189,13 +168,6 @@ function exportCsv(items: ContaPagar[]) {
   a.href = url; a.download = `contas-a-pagar-${todayISO()}.csv`; a.click();
   URL.revokeObjectURL(url);
 }
-
-const EMPTY_FORM: FormState = {
-  fornecedor: '', categoria: 'Outros', descricao: '', valor: '',
-  dataVencimento: todayISO(), observacoes: '', competencia: monthISO(),
-  centroCusto: 'Administrativo', numeroDocumento: '', dataEmissao: todayISO(),
-  formaPagamento: 'Boleto', status: 'aberto'
-};
 
 // ─────────────────────────────────────────────────────────
 //  SHARED UI PRIMITIVES
@@ -517,205 +489,190 @@ function OfxMatchPanel({
 }
 
 // ─────────────────────────────────────────────────────────
-//  MODAL — NOVO LANÇAMENTO
+//  MODAL — DETALHE
 // ─────────────────────────────────────────────────────────
 
-function NovaContaModal({
-  open, saving, form, error,
-  onChange, onSubmit, onClose
-}: {
-  open: boolean; saving: boolean; form: FormState; error: string;
-  onChange: (f: FormState) => void;
-  onSubmit: (e: React.FormEvent) => void;
+interface DetalheModalProps {
+  item: ContaPagar | null;
   onClose: () => void;
-}) {
-  if (!open) return null;
-  const f = form;
-  const set = (k: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
-    onChange({ ...f, [k]: e.target.value });
+  onSave: (id: string, updates: Partial<ContaPagar>) => Promise<void>;
+  onDelete: (id: string) => void;
+}
+
+function DetalheModal({ item, onClose, onSave, onDelete }: DetalheModalProps) {
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState<any>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (item) {
+      setForm({
+        fornecedor: item.fornecedor,
+        categoria: item.categoria,
+        centroCusto: (item as any).centroCusto || 'Administrativo',
+        valor: String(item.valor),
+        dataVencimento: (item.dataVencimento || '').slice(0, 10),
+        dataEmissao: ((item as any).dataEmissao || '').slice(0, 10),
+        numeroDocumento: (item as any).numeroDocumento || '',
+        formaPagamento: (item as any).formaPagamento || 'Boleto',
+        competencia: (item as any).competencia || '',
+        descricao: item.descricao || '',
+        observacoes: (item as any).observacoes || ''
+      });
+      setEditing(false);
+      setError('');
+    }
+  }, [item]);
+
+  if (!item || !form) return null;
+  const eff = getEffectiveStatus(item);
+
+  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+    setForm((f: any) => ({ ...f, [k]: e.target.value }));
+
+  const handleSave = async () => {
+    const valor = Number(String(form.valor).replace(',', '.'));
+    if (!form.fornecedor.trim()) return setError('Informe o fornecedor.');
+    if (!Number.isFinite(valor) || valor <= 0) return setError('Informe um valor maior que zero.');
+    if (!form.dataVencimento) return setError('Informe a data de vencimento.');
+    setError(''); setSaving(true);
+    try {
+      await onSave(item.id, {
+        fornecedor: form.fornecedor.trim(), categoria: form.categoria, centroCusto: form.centroCusto,
+        valor, dataVencimento: form.dataVencimento, dataEmissao: form.dataEmissao,
+        numeroDocumento: form.numeroDocumento, formaPagamento: form.formaPagamento,
+        competencia: form.competencia, descricao: form.descricao, observacoes: form.observacoes
+      } as any);
+      setEditing(false);
+    } catch (err: any) {
+      setError(err?.message || 'Erro ao salvar alterações.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-      <form
-        onSubmit={onSubmit}
-        className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900"
-      >
+      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl dark:bg-slate-900">
         {/* Header */}
-        <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5 dark:border-slate-800">
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl p-2" style={{ background: '#4F39F6' }}>
-              <Receipt className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <h2 className="text-lg font-black text-slate-900 dark:text-white">Novo lançamento financeiro</h2>
-              <p className="text-sm text-slate-500">Preencha os dados da despesa, documento e fluxo de aprovação.</p>
-            </div>
+        <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-6 py-5 dark:border-slate-800">
+          <div>
+            <h2 className="text-lg font-black text-slate-900 dark:text-white">{editing ? 'Editar lançamento' : item.fornecedor}</h2>
+            {!editing && (
+              <div className="mt-1 flex items-center gap-2">
+                <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${statusClass(eff)}`}>
+                  {STATUS_LABEL[eff] || eff}
+                </span>
+                <span className="text-sm text-slate-500">{item.categoria}</span>
+              </div>
+            )}
           </div>
-          <button type="button" onClick={onClose} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-1.5">
+            {!editing && (
+              <>
+                <button onClick={() => setEditing(true)} title="Editar" className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
+                  <Pencil className="h-4 w-4" />
+                </button>
+                <button onClick={() => { onDelete(item.id); onClose(); }} title="Excluir" className="rounded-xl p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/30">
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </>
+            )}
+            <button onClick={onClose} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
-        <div className="p-6 space-y-6">
-          {/* Bloco 1 — Fornecedor e valor */}
-          <section>
-            <p className="mb-3 text-xs font-black uppercase tracking-widest text-slate-400">Identificação</p>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-              <div className="md:col-span-2">
+        {/* Body */}
+        {editing ? (
+          <div className="p-6 space-y-4">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div>
                 <label className="mb-1 block text-xs font-bold text-slate-500">Fornecedor *</label>
-                <input required value={f.fornecedor} onChange={set('fornecedor')} placeholder="Nome do fornecedor" className={inputCls} />
+                <input value={form.fornecedor} onChange={set('fornecedor')} className={inputCls} />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-bold text-slate-500">Valor *</label>
-                <input required type="number" step="0.01" min="0.01" value={f.valor} onChange={set('valor')} placeholder="0,00" className={inputCls} />
+                <input type="number" step="0.01" min="0.01" value={form.valor} onChange={set('valor')} className={inputCls} />
               </div>
-              <div>
-                <label className="mb-1 block text-xs font-bold text-slate-500">NF / Documento</label>
-                <input value={f.numeroDocumento} onChange={set('numeroDocumento')} placeholder="Nº NF / boleto" className={inputCls} />
-              </div>
-            </div>
-          </section>
-
-          {/* Bloco 2 — Classificação */}
-          <section>
-            <p className="mb-3 text-xs font-black uppercase tracking-widest text-slate-400">Classificação</p>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
               <div>
                 <label className="mb-1 block text-xs font-bold text-slate-500">Categoria</label>
-                <select value={f.categoria} onChange={set('categoria')} className={inputCls}>
+                <select value={form.categoria} onChange={set('categoria')} className={inputCls}>
                   {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div>
                 <label className="mb-1 block text-xs font-bold text-slate-500">Centro de custo</label>
-                <select value={f.centroCusto} onChange={set('centroCusto')} className={inputCls}>
+                <select value={form.centroCusto} onChange={set('centroCusto')} className={inputCls}>
                   {CENTROS_CUSTO.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div>
+                <label className="mb-1 block text-xs font-bold text-slate-500">Vencimento *</label>
+                <input type="date" value={form.dataVencimento} onChange={set('dataVencimento')} className={inputCls} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-bold text-slate-500">Emissão</label>
+                <input type="date" value={form.dataEmissao} onChange={set('dataEmissao')} className={inputCls} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-bold text-slate-500">Documento</label>
+                <input value={form.numeroDocumento} onChange={set('numeroDocumento')} className={inputCls} />
+              </div>
+              <div>
                 <label className="mb-1 block text-xs font-bold text-slate-500">Forma de pagamento</label>
-                <select value={f.formaPagamento} onChange={set('formaPagamento')} className={inputCls}>
+                <select value={form.formaPagamento} onChange={set('formaPagamento')} className={inputCls}>
                   {FORMAS_PAGAMENTO.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
-            </div>
-          </section>
-
-          {/* Bloco 3 — Datas */}
-          <section>
-            <p className="mb-3 text-xs font-black uppercase tracking-widest text-slate-400">Datas</p>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-              <div>
-                <label className="mb-1 block text-xs font-bold text-slate-500">Emissão</label>
-                <input type="date" value={f.dataEmissao} onChange={set('dataEmissao')} className={inputCls} />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-bold text-slate-500">Vencimento *</label>
-                <input required type="date" value={f.dataVencimento} onChange={set('dataVencimento')} className={inputCls} />
-              </div>
               <div>
                 <label className="mb-1 block text-xs font-bold text-slate-500">Competência</label>
-                <input type="month" value={f.competencia} onChange={set('competencia')} className={inputCls} />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-bold text-slate-500">Status inicial</label>
-                <select value={f.status} onChange={set('status')} className={inputCls}>
-                  <option value="aberto">Aberto</option>
-                  <option value="aprovacao">Em aprovação</option>
-                  <option value="aprovado">Aprovado</option>
-                  <option value="programado">Programado</option>
-                </select>
+                <input type="month" value={form.competencia} onChange={set('competencia')} className={inputCls} />
               </div>
             </div>
-          </section>
-
-          {/* Bloco 4 — Descrição e observações */}
-          <section>
-            <p className="mb-3 text-xs font-black uppercase tracking-widest text-slate-400">Detalhes</p>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-xs font-bold text-slate-500">Descrição do serviço/produto</label>
-                <textarea value={f.descricao} onChange={set('descricao')} rows={3} placeholder="Descreva o produto ou serviço..." className={inputCls} />
+            <div>
+              <label className="mb-1 block text-xs font-bold text-slate-500">Descrição</label>
+              <textarea rows={2} value={form.descricao} onChange={set('descricao')} className={inputCls} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-bold text-slate-500">Observações</label>
+              <textarea rows={2} value={form.observacoes} onChange={set('observacoes')} className={inputCls} />
+            </div>
+            {error && (
+              <div className="flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300">
+                <AlertCircle className="h-4 w-4 shrink-0" /> {error}
               </div>
-              <div>
-                <label className="mb-1 block text-xs font-bold text-slate-500">Observações internas</label>
-                <textarea value={f.observacoes} onChange={set('observacoes')} rows={3} placeholder="Notas internas, instruções, etc." className={inputCls} />
-              </div>
-            </div>
-            <div className="mt-3">
-              <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:hover:bg-slate-800 transition">
-                <UploadCloud className="h-4 w-4" /> Anexar PDF / XML / imagem
-                <input type="file" accept=".pdf,.xml,.png,.jpg,.jpeg" className="hidden" />
-              </label>
-            </div>
-          </section>
-
-          {/* Erro inline */}
-          {error && (
-            <div className="flex items-center gap-2 rounded-xl bg-rose-50 border border-rose-200 px-4 py-3 text-sm text-rose-700 dark:bg-rose-950/30 dark:border-rose-900 dark:text-rose-300">
-              <AlertCircle className="h-4 w-4 shrink-0" /> {error}
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-6 py-4 dark:border-slate-800">
-          <button type="button" onClick={onClose} className="rounded-xl px-4 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="inline-flex items-center gap-2 rounded-xl px-6 py-2.5 text-sm font-bold text-white transition disabled:opacity-60"
-            style={{ background: '#4F39F6' }}
-          >
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-            {saving ? 'Salvando...' : 'Salvar lançamento'}
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────
-//  MODAL — DETALHE
-// ─────────────────────────────────────────────────────────
-
-function DetalheModal({ item, onClose }: { item: ContaPagar | null; onClose: () => void }) {
-  if (!item) return null;
-  const eff = getEffectiveStatus(item);
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl dark:bg-slate-900">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-6 py-5 dark:border-slate-800">
-          <div>
-            <h2 className="text-lg font-black text-slate-900 dark:text-white">{item.fornecedor}</h2>
-            <div className="mt-1 flex items-center gap-2">
-              <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${statusClass(eff)}`}>
-                {STATUS_LABEL[eff] || eff}
-              </span>
-              <span className="text-sm text-slate-500">{item.categoria}</span>
+            )}
+            <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
+              <button type="button" onClick={() => { setEditing(false); setError(''); }} className="rounded-xl px-4 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                Cancelar
+              </button>
+              <button
+                type="button" onClick={handleSave} disabled={saving}
+                className="inline-flex items-center gap-2 rounded-xl px-6 py-2.5 text-sm font-bold text-white transition disabled:opacity-60"
+                style={{ background: '#4F39F6' }}
+              >
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                {saving ? 'Salvando...' : 'Salvar alterações'}
+              </button>
             </div>
           </div>
-          <button onClick={onClose} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        {/* Body */}
-        <div className="p-6 grid grid-cols-1 gap-3 md:grid-cols-2">
-          <Detail label="Valor" value={money(item.valor)} />
-          <Detail label="Centro de custo" value={(item as any).centroCusto || 'Administrativo'} />
-          <Detail label="Vencimento" value={formatDate(item.dataVencimento)} />
-          <Detail label="Pagamento" value={(item as any).dataPagamento ? formatDate((item as any).dataPagamento) : '—'} />
-          <Detail label="Documento" value={(item as any).numeroDocumento || '—'} />
-          <Detail label="Forma de pagamento" value={(item as any).formaPagamento || '—'} />
-          <Detail label="Emissão" value={(item as any).dataEmissao ? formatDate((item as any).dataEmissao) : '—'} />
-          <Detail label="Competência" value={(item as any).competencia || '—'} />
-          {item.descricao && <Detail label="Descrição" value={item.descricao} wide />}
-          {(item as any).observacoes && <Detail label="Observações" value={(item as any).observacoes} wide />}
-        </div>
+        ) : (
+          <div className="p-6 grid grid-cols-1 gap-3 md:grid-cols-2">
+            <Detail label="Valor" value={money(item.valor)} />
+            <Detail label="Centro de custo" value={(item as any).centroCusto || 'Administrativo'} />
+            <Detail label="Vencimento" value={formatDate(item.dataVencimento)} />
+            <Detail label="Pagamento" value={(item as any).dataPagamento ? formatDate((item as any).dataPagamento) : '—'} />
+            <Detail label="Documento" value={(item as any).numeroDocumento || '—'} />
+            <Detail label="Forma de pagamento" value={(item as any).formaPagamento || '—'} />
+            <Detail label="Emissão" value={(item as any).dataEmissao ? formatDate((item as any).dataEmissao) : '—'} />
+            <Detail label="Competência" value={(item as any).competencia || '—'} />
+            {item.descricao && <Detail label="Descrição" value={item.descricao} wide />}
+            {(item as any).observacoes && <Detail label="Observações" value={(item as any).observacoes} wide />}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -936,16 +893,112 @@ function RelatoriosTab({ byCostCenter, byCategory, filtered, loading, onPaid, on
 }
 
 // ─────────────────────────────────────────────────────────
+//  STEPPER — navegação em fluxo de etapas
+// ─────────────────────────────────────────────────────────
+
+const STEP_ORDER: TabKey[] = ['dashboard', 'contas', 'kanban', 'fluxo', 'relatorios'];
+
+const STEP_META: Record<TabKey, { label: string; subtitle: string; icon: React.ElementType }> = {
+  dashboard: { label: 'Dashboard', subtitle: 'Resumo por categoria e próximos vencimentos', icon: LayoutDashboard },
+  contas: { label: 'Contas', subtitle: 'Todas as contas com filtros avançados', icon: ListChecks },
+  kanban: { label: 'Aprovações', subtitle: 'Fluxo de aprovação por estágio', icon: ShieldCheck },
+  fluxo: { label: 'Fluxo de Caixa', subtitle: 'Projeção de saídas por ordem de vencimento', icon: TrendingDown },
+  relatorios: { label: 'Relatórios', subtitle: 'Por centro de custo e categoria, com exportação CSV', icon: BarChart3 }
+};
+
+function StepperNav({ current, onNavigate, visited, badgeCount }: {
+  current: TabKey;
+  onNavigate: (s: TabKey) => void;
+  visited: Set<TabKey>;
+  badgeCount: number;
+}) {
+  const currentIndex = STEP_ORDER.indexOf(current);
+  return (
+    <Card className="p-3 sm:p-4">
+      <div className="flex items-center">
+        {STEP_ORDER.map((key, i) => {
+          const meta = STEP_META[key];
+          const Icon = meta.icon;
+          const isActive = key === current;
+          const isVisited = visited.has(key);
+          const isLast = i === STEP_ORDER.length - 1;
+          return (
+            <React.Fragment key={key}>
+              <button
+                type="button"
+                onClick={() => onNavigate(key)}
+                className="group flex flex-1 flex-col items-center gap-1.5 sm:flex-initial sm:min-w-[96px]"
+              >
+                <span
+                  className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 text-sm font-black transition sm:h-10 sm:w-10 ${
+                    isActive
+                      ? 'border-transparent text-white shadow-md'
+                      : isVisited
+                        ? 'border-[#4F39F6] text-[#4F39F6] bg-white dark:bg-slate-900'
+                        : 'border-slate-200 text-slate-400 bg-white group-hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900'
+                  }`}
+                  style={isActive ? { background: '#4F39F6' } : {}}
+                >
+                  <Icon className="h-4 w-4" />
+                  {key === 'kanban' && badgeCount > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-black text-white">
+                      {badgeCount > 9 ? '9+' : badgeCount}
+                    </span>
+                  )}
+                </span>
+                <span className={`hidden text-center text-[11px] font-bold leading-tight sm:block ${isActive ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`}>
+                  {meta.label}
+                </span>
+              </button>
+              {!isLast && (
+                <div className={`mx-1 h-0.5 flex-1 rounded-full transition-colors sm:mx-2 ${i < currentIndex ? 'bg-[#4F39F6]' : 'bg-slate-200 dark:bg-slate-800'}`} />
+              )}
+            </React.Fragment>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+function StepFooterNav({ current, onNavigate }: { current: TabKey; onNavigate: (s: TabKey) => void }) {
+  const idx = STEP_ORDER.indexOf(current);
+  const prev = idx > 0 ? STEP_ORDER[idx - 1] : null;
+  const next = idx < STEP_ORDER.length - 1 ? STEP_ORDER[idx + 1] : null;
+  return (
+    <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-4 dark:border-slate-800">
+      <button
+        type="button"
+        disabled={!prev}
+        onClick={() => prev && onNavigate(prev)}
+        className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+      >
+        <ChevronLeft className="h-4 w-4" /> {prev ? STEP_META[prev].label : 'Início'}
+      </button>
+      <button
+        type="button"
+        disabled={!next}
+        onClick={() => next && onNavigate(next)}
+        className="inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-bold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+        style={{ background: '#4F39F6' }}
+      >
+        {next ? STEP_META[next].label : 'Fim'} <ChevronRight className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────
 //  MAIN COMPONENT
 // ─────────────────────────────────────────────────────────
 
-export default function ContasPagarView({ user }: ContasPagarViewProps) {
+export default function ContasPagarView({ user, onNavigate }: ContasPagarViewProps) {
   const [items, setItems] = useState<ContaPagar[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [tab, setTab] = useState<TabKey>('dashboard');
+  const [visited, setVisited] = useState<Set<TabKey>>(() => new Set(['dashboard']));
 
   // Filters
   const [search, setSearch] = useState('');
@@ -955,10 +1008,7 @@ export default function ContasPagarView({ user }: ContasPagarViewProps) {
   const [monthFilter, setMonthFilter] = useState(monthISO());
 
   // Modals
-  const [showForm, setShowForm] = useState(false);
   const [selectedItem, setSelectedItem] = useState<ContaPagar | null>(null);
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [formError, setFormError] = useState('');
 
   // OFX
   const [ofxMatches, setOfxMatches] = useState<Array<{ entry: OfxEntry; item: ContaPagar; score: number }>>([]);
@@ -1009,6 +1059,9 @@ export default function ContasPagarView({ user }: ContasPagarViewProps) {
     };
   }, [items]);
 
+  const pendingApprovalCount = useMemo(() =>
+    items.filter(i => getEffectiveStatus(i) === 'aprovacao').length, [items]);
+
   const byCategory = useMemo(() => {
     const map = new Map<string, number>();
     items.filter(i => getEffectiveStatus(i) !== 'pago').forEach(i => {
@@ -1037,31 +1090,9 @@ export default function ContasPagarView({ user }: ContasPagarViewProps) {
   }, [items]);
 
   // ── Handlers ──────────────────────────────────────────
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const valor = Number(String(form.valor).replace(',', '.'));
-    if (!form.fornecedor.trim()) return setFormError('Informe o fornecedor antes de adicionar.');
-    if (!Number.isFinite(valor) || valor <= 0) return setFormError('Informe um valor maior que zero.');
-    if (!form.dataVencimento) return setFormError('Informe a data de vencimento.');
-    setFormError(''); setSaving(true);
-    try {
-      const status = form.status === 'aberto' && form.dataVencimento < todayISO() ? 'vencido' : form.status;
-      const created = await addContaPagar(user, {
-        fornecedor: form.fornecedor.trim(), categoria: form.categoria, descricao: form.descricao,
-        valor, dataVencimento: form.dataVencimento, status, observacoes: form.observacoes,
-        competencia: form.competencia, centroCusto: form.centroCusto,
-        numeroDocumento: form.numeroDocumento, dataEmissao: form.dataEmissao,
-        formaPagamento: form.formaPagamento
-      });
-      setItems(prev => [created, ...prev]);
-      setSuccess('Conta a pagar adicionada com sucesso.');
-      setShowForm(false);
-      setForm(EMPTY_FORM);
-    } catch (err: any) {
-      setFormError(err?.message || 'Erro ao criar conta a pagar.');
-    } finally {
-      setSaving(false);
-    }
+  const goToStep = (s: TabKey) => {
+    setTab(s);
+    setVisited(prev => (prev.has(s) ? prev : new Set(prev).add(s)));
   };
 
   const updateStatus = async (item: ContaPagar, status: StatusConta, extra: any = {}) => {
@@ -1097,6 +1128,13 @@ export default function ContasPagarView({ user }: ContasPagarViewProps) {
     } catch (err: any) {
       setError(err?.message || 'Erro ao excluir conta.');
     }
+  };
+
+  const handleEditSave = async (id: string, updates: Partial<ContaPagar>) => {
+    const updated = await updateContaPagar(id, updates);
+    setItems(prev => prev.map(x => x.id === id ? updated : x));
+    setSelectedItem(updated);
+    setSuccess('Lançamento atualizado com sucesso.');
   };
 
   const handleOFX = async (file: File) => {
@@ -1171,7 +1209,7 @@ export default function ContasPagarView({ user }: ContasPagarViewProps) {
 
             {/* Primary CTA */}
             <button
-              onClick={() => setShowForm(true)}
+              onClick={() => onNavigate?.('novo_lancamento')}
               className="inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-bold text-white transition hover:opacity-90 shrink-0"
               style={{ background: '#4F39F6' }}
             >
@@ -1216,24 +1254,21 @@ export default function ContasPagarView({ user }: ContasPagarViewProps) {
         <StatCard title="Pago" value={money(stats.paidValue)} subtitle="Baixas realizadas" icon={CheckCircle2} accent="#059669" />
       </div>
 
-      {/* ── Tabs ── */}
-      <div className="flex gap-1.5 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        {TABS.map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={`inline-flex min-w-max items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition ${tab === key
-                ? 'text-white shadow'
-                : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'
-              }`}
-            style={tab === key ? { background: '#4F39F6' } : {}}
-          >
-            <Icon className="h-4 w-4" /> {label}
-          </button>
-        ))}
+      {/* ── Stepper: fluxo guiado ── */}
+      <StepperNav current={tab} onNavigate={goToStep} visited={visited} badgeCount={pendingApprovalCount} />
+
+      {/* ── Etapa atual ── */}
+      <div className="flex items-center gap-2.5">
+        <div className="rounded-xl p-2" style={{ background: '#4F39F6' }}>
+          {(() => { const Icon = STEP_META[tab].icon; return <Icon className="h-4 w-4 text-white" />; })()}
+        </div>
+        <div>
+          <h2 className="text-base font-black text-slate-900 dark:text-white leading-tight">{STEP_META[tab].label}</h2>
+          <p className="text-xs text-slate-500">{STEP_META[tab].subtitle}</p>
+        </div>
       </div>
 
-      {/* ── Filters (all tabs) ── */}
+      {/* ── Filters (todas as etapas) ── */}
       <FiltersBar
         search={search} setSearch={setSearch}
         statusFilter={statusFilter} setStatusFilter={setStatusFilter}
@@ -1247,9 +1282,9 @@ export default function ContasPagarView({ user }: ContasPagarViewProps) {
         <DashboardTab
           stats={stats} byCategory={byCategory} filtered={filtered} loading={loading}
           onPaid={markPaid} onDelete={handleDelete} onView={setSelectedItem} onStatus={updateStatus}
-          onNewConta={() => setShowForm(true)}
-          onGoKanban={() => setTab('kanban')}
-          onGoFluxo={() => setTab('fluxo')}
+          onNewConta={() => onNavigate?.('novo_lancamento')}
+          onGoKanban={() => goToStep('kanban')}
+          onGoFluxo={() => goToStep('fluxo')}
         />
       )}
 
@@ -1276,15 +1311,11 @@ export default function ContasPagarView({ user }: ContasPagarViewProps) {
         />
       )}
 
-      {/* ── Modals ── */}
-      <NovaContaModal
-        open={showForm} saving={saving} form={form} error={formError}
-        onChange={setForm}
-        onSubmit={handleCreate}
-        onClose={() => { setShowForm(false); setFormError(''); }}
-      />
+      {/* ── Navegação entre etapas ── */}
+      <StepFooterNav current={tab} onNavigate={goToStep} />
 
-      <DetalheModal item={selectedItem} onClose={() => setSelectedItem(null)} />
+      {/* ── Modais ── */}
+      <DetalheModal item={selectedItem} onClose={() => setSelectedItem(null)} onSave={handleEditSave} onDelete={handleDelete} />
     </div>
   );
 }

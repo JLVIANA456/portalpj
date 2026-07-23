@@ -2,18 +2,21 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
   ArrowDownUp,
-  ArrowLeft,
   BarChart3,
   BanknoteArrowUp,
   Calendar,
   CalendarDays,
   CheckCircle2,
+  ChevronLeft,
   ChevronRight,
   Clock3,
+  Eye,
   FileText,
   FileUp,
   Filter,
+  LayoutDashboard,
   Mail,
+  Pencil,
   Plus,
   Receipt,
   RefreshCw,
@@ -28,7 +31,7 @@ import {
   XCircle
 } from 'lucide-react';
 import { ContaReceber, PJUser } from '../types';
-import { addContaReceber, deleteContaReceber, getContasReceber, updateContaReceber } from '../lib/db';
+import { deleteContaReceber, getContasReceber, updateContaReceber } from '../lib/db';
 
 // ─────────────────────────────────────────────────────────
 //  TYPES
@@ -36,6 +39,7 @@ import { addContaReceber, deleteContaReceber, getContasReceber, updateContaReceb
 
 interface ContasReceberViewProps {
   user: PJUser;
+  onNavigate?: (tab: string) => void;
 }
 
 interface OfxEntry {
@@ -60,23 +64,6 @@ type ContaReceberExtra = ContaReceber & {
   ofxFitid?: string;
   ofxData?: string;
   ofxDescricao?: string;
-};
-
-type FormState = {
-  clienteNome: string;
-  clienteEmail: string;
-  clienteDocumento: string;
-  descricao: string;
-  valor: string;
-  dataEmissao: string;
-  dataVencimento: string;
-  numeroNF: string;
-  serieNF: string;
-  competencia: string;
-  centroReceita: string;
-  formaRecebimento: string;
-  origem: string;
-  observacoes: string;
 };
 
 // ─────────────────────────────────────────────────────────
@@ -168,13 +155,6 @@ function statusLabel(s: StatusReceber) {
   return ({ pendente: 'Pendente', enviado: 'Cobrança enviada', vencido: 'Vencido', recebido: 'Recebido' } as Record<string, string>)[s] || s;
 }
 
-const EMPTY_FORM: FormState = {
-  clienteNome: '', clienteEmail: '', clienteDocumento: '', descricao: '', valor: '',
-  dataEmissao: todayISO(), dataVencimento: todayISO(),
-  numeroNF: '', serieNF: '', competencia: todayISO().slice(0, 7),
-  centroReceita: 'Contabilidade', formaRecebimento: 'PIX', origem: 'Honorários', observacoes: ''
-};
-
 // ─────────────────────────────────────────────────────────
 //  PRIMITIVES
 // ─────────────────────────────────────────────────────────
@@ -230,274 +210,6 @@ function ProgressBar({ value, max }: { value: number; max: number }) {
 }
 
 // ─────────────────────────────────────────────────────────
-//  SCREEN SHELL — fullscreen panel with back nav
-// ─────────────────────────────────────────────────────────
-
-function ScreenShell({
-  title, subtitle, icon: Icon, onBack, actions, children, toast, onDismissToast
-}: {
-  title: string;
-  subtitle?: string;
-  icon: React.ElementType;
-  onBack: () => void;
-  actions?: React.ReactNode;
-  children: React.ReactNode;
-  toast?: { type: 'error' | 'success'; message: string } | null;
-  onDismissToast?: () => void;
-}) {
-  return (
-    <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950">
-      {/* ── Top bar ── */}
-      <div className="sticky top-0 z-30 border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-        <div className="mx-auto max-w-[1440px] flex items-center gap-3 px-4 py-3">
-          <button
-            onClick={onBack}
-            className="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 transition dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" /> Voltar
-          </button>
-
-          <div className="flex items-center gap-2.5 flex-1 min-w-0">
-            <div className="shrink-0 rounded-xl p-2" style={{ background: PRIMARY }}>
-              <Icon className="h-4 w-4 text-white" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-base font-black text-slate-900 dark:text-white leading-tight truncate">{title}</h1>
-              {subtitle && <p className="text-xs text-slate-500 truncate">{subtitle}</p>}
-            </div>
-          </div>
-
-          {actions && <div className="flex items-center gap-1.5 shrink-0">{actions}</div>}
-        </div>
-
-        {/* Toast inline in topbar area */}
-        {toast && (
-          <div className={`border-t px-4 py-2.5 flex items-center justify-between gap-3 text-sm ${toast.type === 'error'
-              ? 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300'
-              : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300'
-            }`}>
-            <div className="flex items-center gap-2">
-              {toast.type === 'error'
-                ? <AlertCircle className="h-4 w-4 shrink-0" />
-                : <CheckCircle2 className="h-4 w-4 shrink-0" />}
-              {toast.message}
-            </div>
-            {onDismissToast && (
-              <button onClick={onDismissToast}><X className="h-4 w-4" /></button>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* ── Content ── */}
-      <div className="flex-1 mx-auto w-full max-w-[1440px] px-4 py-5 space-y-4">
-        {children}
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────
-//  FULLSCREEN MODAL (Nova conta)
-// ─────────────────────────────────────────────────────────
-
-function FullscreenModal({
-  open, title, subtitle, icon: Icon, onClose, children
-}: {
-  open: boolean;
-  title: string;
-  subtitle?: string;
-  icon: React.ElementType;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  if (!open) return null;
-  return (
-    <div className="fixed top-0 left-0 w-screen h-screen z-50 flex flex-col bg-white dark:bg-slate-950 overflow-hidden">
-      {/* Header */}
-      <div className="shrink-0 border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-        <div className="mx-auto max-w-4xl flex items-center gap-3 px-6 py-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 transition"
-          >
-            <X className="h-3.5 w-3.5" /> Fechar
-          </button>
-          <div className="flex items-center gap-2.5 flex-1 min-w-0">
-            <div className="shrink-0 rounded-xl p-2" style={{ background: PRIMARY }}>
-              <Icon className="h-4 w-4 text-white" />
-            </div>
-            <div>
-              <h2 className="text-base font-black text-slate-900 dark:text-white">{title}</h2>
-              {subtitle && <p className="text-xs text-slate-500">{subtitle}</p>}
-            </div>
-          </div>
-        </div>
-      </div>
-      {/* Scrollable body */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-4xl px-6 py-8">
-          {children}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────
-//  NOVO RECEBIMENTO FORM
-// ─────────────────────────────────────────────────────────
-
-interface NovoRecebimentoFormProps {
-  saving: boolean;
-  form: FormState;
-  error: string;
-  onChange: (f: FormState) => void;
-  onSubmit: (e: React.FormEvent) => void;
-  onClose: () => void;
-}
-
-function NovoRecebimentoForm({ saving, form, error, onChange, onSubmit, onClose }: NovoRecebimentoFormProps) {
-  const f = form;
-  const set = (k: keyof FormState) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
-      onChange({ ...f, [k]: e.target.value });
-
-  return (
-    <form onSubmit={onSubmit} className="space-y-8">
-      {/* Bloco 1 — Cliente */}
-      <section>
-        <div className="mb-4 flex items-center gap-2">
-          <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
-          <p className="text-xs font-black uppercase tracking-widest text-slate-400">Dados do cliente</p>
-          <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
-        </div>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-          <div className="md:col-span-2">
-            <label className="mb-1.5 block text-xs font-bold text-slate-500">Nome do cliente *</label>
-            <input required value={f.clienteNome} onChange={set('clienteNome')} placeholder="Razão social ou nome" className={inputCls} />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-bold text-slate-500">E-mail</label>
-            <input type="email" value={f.clienteEmail} onChange={set('clienteEmail')} placeholder="cliente@email.com" className={inputCls} />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-bold text-slate-500">CPF / CNPJ</label>
-            <input value={f.clienteDocumento} onChange={set('clienteDocumento')} placeholder="000.000.000-00" className={inputCls} />
-          </div>
-        </div>
-      </section>
-
-      {/* Bloco 2 — Recebimento */}
-      <section>
-        <div className="mb-4 flex items-center gap-2">
-          <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
-          <p className="text-xs font-black uppercase tracking-widest text-slate-400">Dados do recebimento</p>
-          <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
-        </div>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-          <div className="md:col-span-2">
-            <label className="mb-1.5 block text-xs font-bold text-slate-500">Descrição</label>
-            <input value={f.descricao} onChange={set('descricao')} placeholder="Honorários contábeis, NF, etc." className={inputCls} />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-bold text-slate-500">Valor *</label>
-            <input required type="number" step="0.01" min="0.01" value={f.valor} onChange={set('valor')} placeholder="0,00" className={inputCls} />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-bold text-slate-500">Origem</label>
-            <input value={f.origem} onChange={set('origem')} placeholder="Honorários, BPO, etc." className={inputCls} />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-bold text-slate-500">Número NF</label>
-            <input value={f.numeroNF} onChange={set('numeroNF')} placeholder="00001" className={inputCls} />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-bold text-slate-500">Série NF</label>
-            <input value={f.serieNF} onChange={set('serieNF')} placeholder="A" className={inputCls} />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-bold text-slate-500">Centro de receita</label>
-            <select value={f.centroReceita} onChange={set('centroReceita')} className={inputCls}>
-              {CENTROS_RECEITA.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-bold text-slate-500">Forma de recebimento</label>
-            <select value={f.formaRecebimento} onChange={set('formaRecebimento')} className={inputCls}>
-              {FORMAS_RECEBIMENTO.map(x => <option key={x} value={x}>{x}</option>)}
-            </select>
-          </div>
-        </div>
-      </section>
-
-      {/* Bloco 3 — Datas */}
-      <section>
-        <div className="mb-4 flex items-center gap-2">
-          <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
-          <p className="text-xs font-black uppercase tracking-widest text-slate-400">Datas</p>
-          <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
-        </div>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <div>
-            <label className="mb-1.5 block text-xs font-bold text-slate-500">Emissão</label>
-            <input type="date" value={f.dataEmissao} onChange={set('dataEmissao')} className={inputCls} />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-bold text-slate-500">Vencimento *</label>
-            <input required type="date" value={f.dataVencimento} onChange={set('dataVencimento')} className={inputCls} />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-bold text-slate-500">Competência</label>
-            <input type="month" value={f.competencia} onChange={set('competencia')} className={inputCls} />
-          </div>
-        </div>
-      </section>
-
-      {/* Bloco 4 — Observações */}
-      <section>
-        <div className="mb-4 flex items-center gap-2">
-          <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
-          <p className="text-xs font-black uppercase tracking-widest text-slate-400">Observações</p>
-          <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
-        </div>
-        <textarea
-          value={f.observacoes}
-          onChange={set('observacoes')}
-          rows={4}
-          placeholder="Notas internas, instruções para cobrança, etc."
-          className={inputCls}
-        />
-      </section>
-
-      {/* Erro */}
-      {error && (
-        <div className="flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          <AlertCircle className="h-4 w-4 shrink-0" /> {error}
-        </div>
-      )}
-
-      {/* CTA footer */}
-      <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
-        <button type="button" onClick={onClose} className="rounded-xl px-5 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-100 transition">
-          Cancelar
-        </button>
-        <button
-          type="submit"
-          disabled={saving}
-          className="inline-flex items-center gap-2 rounded-xl px-7 py-2.5 text-sm font-bold text-white transition disabled:opacity-60"
-          style={{ background: PRIMARY }}
-        >
-          <CheckCircle2 className="h-4 w-4" />
-          {saving ? 'Salvando...' : 'Salvar recebimento'}
-        </button>
-      </div>
-    </form>
-  );
-}
-
-// ─────────────────────────────────────────────────────────
 //  CONTA CARD
 // ─────────────────────────────────────────────────────────
 
@@ -508,9 +220,10 @@ interface ContaCardProps {
   onMarkSent: (item: ContaReceberExtra) => void;
   onMarkPending: (item: ContaReceberExtra) => void;
   onDelete: (id: string) => void;
+  onView: (item: ContaReceberExtra) => void;
 }
 
-function ContaCard({ item, compact = false, onMarkReceived, onMarkSent, onMarkPending, onDelete }: ContaCardProps) {
+function ContaCard({ item, compact = false, onMarkReceived, onMarkSent, onMarkPending, onDelete, onView }: ContaCardProps) {
   const status = computedStatus(item);
   const overdueDays = status === 'vencido' ? Math.abs(daysBetween(item.dataVencimento, todayISO())) : 0;
 
@@ -563,6 +276,9 @@ function ContaCard({ item, compact = false, onMarkReceived, onMarkSent, onMarkPe
                 <RefreshCw className="h-3.5 w-3.5" /> Reabrir
               </button>
             )}
+            <button onClick={() => onView(item)} title="Ver detalhes" className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800">
+              <Eye className="h-4 w-4" />
+            </button>
             <button onClick={() => onDelete(item.id)} title="Excluir" className="rounded-lg p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600">
               <Trash2 className="h-4 w-4" />
             </button>
@@ -570,6 +286,221 @@ function ContaCard({ item, compact = false, onMarkReceived, onMarkSent, onMarkPe
         </div>
       </div>
     </Card>
+  );
+}
+
+// ─────────────────────────────────────────────────────────
+//  DETALHE MODAL
+// ─────────────────────────────────────────────────────────
+
+function Detail({ label, value, wide }: { label: string; value: string; wide?: boolean }) {
+  return (
+    <div className={`rounded-xl bg-slate-50 p-4 dark:bg-slate-950 ${wide ? 'md:col-span-2' : ''}`}>
+      <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{value}</p>
+    </div>
+  );
+}
+
+interface DetalheModalProps {
+  item: ContaReceberExtra | null;
+  onClose: () => void;
+  onSave: (id: string, updates: Partial<ContaReceberExtra>) => Promise<void>;
+  onDelete: (id: string) => void;
+}
+
+function DetalheModal({ item, onClose, onSave, onDelete }: DetalheModalProps) {
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState<any>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (item) {
+      setForm({
+        clienteNome: item.clienteNome,
+        clienteEmail: item.clienteEmail || '',
+        clienteDocumento: item.clienteDocumento || '',
+        descricao: item.descricao || '',
+        valor: String(item.valor),
+        dataEmissao: (item.dataEmissao || '').slice(0, 10),
+        dataVencimento: (item.dataVencimento || '').slice(0, 10),
+        numeroNF: item.numeroNF || '',
+        serieNF: item.serieNF || '',
+        competencia: item.competencia || '',
+        centroReceita: item.centroReceita || 'Contabilidade',
+        formaRecebimento: item.formaRecebimento || 'PIX',
+        origem: item.origem || '',
+        observacoes: item.observacoes || ''
+      });
+      setEditing(false);
+      setError('');
+    }
+  }, [item]);
+
+  if (!item || !form) return null;
+  const status = computedStatus(item);
+
+  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+    setForm((f: any) => ({ ...f, [k]: e.target.value }));
+
+  const handleSave = async () => {
+    const valor = Number(String(form.valor).replace(',', '.'));
+    if (!form.clienteNome.trim()) return setError('Informe o nome do cliente.');
+    if (!Number.isFinite(valor) || valor <= 0) return setError('Informe um valor maior que zero.');
+    if (!form.dataVencimento) return setError('Informe a data de vencimento.');
+    setError(''); setSaving(true);
+    try {
+      await onSave(item.id, {
+        clienteNome: form.clienteNome.trim(), clienteEmail: form.clienteEmail.trim(), clienteDocumento: form.clienteDocumento.trim(),
+        descricao: form.descricao.trim(), valor, dataEmissao: form.dataEmissao, dataVencimento: form.dataVencimento,
+        numeroNF: form.numeroNF.trim(), serieNF: form.serieNF.trim(), competencia: form.competencia,
+        centroReceita: form.centroReceita, formaRecebimento: form.formaRecebimento, origem: form.origem.trim(),
+        observacoes: form.observacoes.trim()
+      } as any);
+      setEditing(false);
+    } catch (err: any) {
+      setError(err?.message || 'Erro ao salvar alterações.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl dark:bg-slate-900">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-6 py-5 dark:border-slate-800">
+          <div>
+            <h2 className="text-lg font-black text-slate-900 dark:text-white">{editing ? 'Editar recebimento' : item.clienteNome}</h2>
+            {!editing && (
+              <div className="mt-1 flex items-center gap-2">
+                <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${statusClasses(status)}`}>
+                  {statusLabel(status)}
+                </span>
+                {item.numeroNF && <span className="text-sm text-slate-500">NF {item.numeroNF}</span>}
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5">
+            {!editing && (
+              <>
+                <button onClick={() => setEditing(true)} title="Editar" className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
+                  <Pencil className="h-4 w-4" />
+                </button>
+                <button onClick={() => { onDelete(item.id); onClose(); }} title="Excluir" className="rounded-xl p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/30">
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </>
+            )}
+            <button onClick={onClose} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Body */}
+        {editing ? (
+          <div className="p-6 space-y-4">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-bold text-slate-500">Nome do cliente *</label>
+                <input value={form.clienteNome} onChange={set('clienteNome')} className={inputCls} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-bold text-slate-500">Valor *</label>
+                <input type="number" step="0.01" min="0.01" value={form.valor} onChange={set('valor')} className={inputCls} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-bold text-slate-500">E-mail</label>
+                <input type="email" value={form.clienteEmail} onChange={set('clienteEmail')} className={inputCls} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-bold text-slate-500">CPF / CNPJ</label>
+                <input value={form.clienteDocumento} onChange={set('clienteDocumento')} className={inputCls} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-bold text-slate-500">Vencimento *</label>
+                <input type="date" value={form.dataVencimento} onChange={set('dataVencimento')} className={inputCls} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-bold text-slate-500">Emissão</label>
+                <input type="date" value={form.dataEmissao} onChange={set('dataEmissao')} className={inputCls} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-bold text-slate-500">Número NF</label>
+                <input value={form.numeroNF} onChange={set('numeroNF')} className={inputCls} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-bold text-slate-500">Série NF</label>
+                <input value={form.serieNF} onChange={set('serieNF')} className={inputCls} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-bold text-slate-500">Centro de receita</label>
+                <select value={form.centroReceita} onChange={set('centroReceita')} className={inputCls}>
+                  {CENTROS_RECEITA.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-bold text-slate-500">Forma de recebimento</label>
+                <select value={form.formaRecebimento} onChange={set('formaRecebimento')} className={inputCls}>
+                  {FORMAS_RECEBIMENTO.map(x => <option key={x} value={x}>{x}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-bold text-slate-500">Competência</label>
+                <input type="month" value={form.competencia} onChange={set('competencia')} className={inputCls} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-bold text-slate-500">Origem</label>
+                <input value={form.origem} onChange={set('origem')} className={inputCls} />
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-bold text-slate-500">Descrição</label>
+              <textarea rows={2} value={form.descricao} onChange={set('descricao')} className={inputCls} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-bold text-slate-500">Observações</label>
+              <textarea rows={2} value={form.observacoes} onChange={set('observacoes')} className={inputCls} />
+            </div>
+            {error && (
+              <div className="flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300">
+                <AlertCircle className="h-4 w-4 shrink-0" /> {error}
+              </div>
+            )}
+            <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
+              <button type="button" onClick={() => { setEditing(false); setError(''); }} className="rounded-xl px-4 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                Cancelar
+              </button>
+              <button
+                type="button" onClick={handleSave} disabled={saving}
+                className="inline-flex items-center gap-2 rounded-xl px-6 py-2.5 text-sm font-bold text-white transition disabled:opacity-60"
+                style={{ background: PRIMARY }}
+              >
+                {saving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                {saving ? 'Salvando...' : 'Salvar alterações'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="p-6 grid grid-cols-1 gap-3 md:grid-cols-2">
+            <Detail label="Valor" value={money(item.valor)} />
+            <Detail label="Centro de receita" value={item.centroReceita || 'Outros'} />
+            <Detail label="Vencimento" value={toBRDate(item.dataVencimento)} />
+            <Detail label="Recebimento" value={item.dataRecebimento ? toBRDate(item.dataRecebimento) : '—'} />
+            <Detail label="Número NF" value={item.numeroNF || '—'} />
+            <Detail label="Forma de recebimento" value={item.formaRecebimento || '—'} />
+            <Detail label="Emissão" value={item.dataEmissao ? toBRDate(item.dataEmissao) : '—'} />
+            <Detail label="Competência" value={item.competencia || '—'} />
+            {item.clienteEmail && <Detail label="E-mail" value={item.clienteEmail} />}
+            {item.origem && <Detail label="Origem" value={item.origem} />}
+            {item.descricao && <Detail label="Descrição" value={item.descricao} wide />}
+            {item.observacoes && <Detail label="Observações" value={item.observacoes} wide />}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -623,20 +554,12 @@ function FiltersBar({
 //  SCREENS
 // ─────────────────────────────────────────────────────────
 
-// HOME DASHBOARD
-function HomeScreen({ stats, byMonth, byClient, onNavigate }: {
+// HOME DASHBOARD — etapa "Visão Geral"
+function HomeScreen({ stats, byMonth, byClient }: {
   stats: any;
   byMonth: [string, { previsto: number; recebido: number }][];
   byClient: [string, number][];
-  onNavigate: (s: Screen) => void;
 }) {
-  const MENU: { screen: Screen; icon: React.ElementType; label: string; desc: string; count?: number; alert?: boolean }[] = [
-    { screen: 'recebimentos', icon: Receipt, label: 'Recebimentos', desc: 'Todos os títulos e baixa manual' },
-    { screen: 'cobrancas', icon: Mail, label: 'Cobranças', desc: 'Envio e acompanhamento de cobranças', count: stats.overdueCount, alert: stats.overdueCount > 0 },
-    { screen: 'fluxo', icon: TrendingUp, label: 'Fluxo de caixa', desc: 'Entradas projetadas por vencimento' },
-    { screen: 'relatorios', icon: BarChart3, label: 'Relatórios', desc: 'Receita por centro e aging' },
-  ];
-
   return (
     <div className="space-y-6">
       {/* Stat cards */}
@@ -647,35 +570,6 @@ function HomeScreen({ stats, byMonth, byClient, onNavigate }: {
         <StatCard icon={CalendarDays} title="Prev. 30 dias" value={money(stats.next30Value)} subtitle="Entradas futuras próximas" accentBg="#0891b2" />
         <StatCard icon={Receipt} title="Ticket médio" value={money(stats.ticket)} subtitle="Média por recebimento" accentBg="#7c3aed" />
         <StatCard icon={XCircle} title="Inadimplência" value={`${stats.inadimplencia.toFixed(1)}%`} subtitle="Sobre saldo em aberto" accentBg="#d97706" />
-      </div>
-
-      {/* Navigation cards */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {MENU.map(({ screen, icon: Icon, label, desc, count, alert }) => (
-          <button
-            key={screen}
-            onClick={() => onNavigate(screen)}
-            className="group relative flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm hover:border-[#4F39F6]/30 hover:shadow-md transition-all dark:border-slate-800 dark:bg-slate-900"
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="shrink-0 rounded-xl p-2.5" style={{ background: PRIMARY }}>
-                <Icon className="h-5 w-5 text-white" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="font-black text-slate-900 dark:text-white">{label}</p>
-                  {count !== undefined && count > 0 && (
-                    <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-black text-white ${alert ? 'bg-rose-500' : 'bg-slate-400'}`}>
-                      {count}
-                    </span>
-                  )}
-                </div>
-                <p className="mt-0.5 text-xs text-slate-500 truncate">{desc}</p>
-              </div>
-            </div>
-            <ChevronRight className="h-4 w-4 text-slate-300 shrink-0 group-hover:translate-x-1 transition-transform" />
-          </button>
-        ))}
       </div>
 
       {/* Charts row */}
@@ -936,34 +830,120 @@ function RelatoriosScreen({ byCentro, aging }: { byCentro: [string, number][]; a
 //  SCREEN CONFIG
 // ─────────────────────────────────────────────────────────
 
-const SCREEN_META: Record<Exclude<Screen, 'home'>, { title: string; subtitle: string; icon: React.ElementType }> = {
-  recebimentos: { title: 'Recebimentos', subtitle: 'Todos os títulos, baixa manual e conciliação OFX', icon: Receipt },
-  cobrancas: { title: 'Cobranças', subtitle: 'Acompanhe envios, inadimplência e cobranças vencidas', icon: Mail },
-  fluxo: { title: 'Fluxo de caixa', subtitle: 'Entradas projetadas por ordem de vencimento', icon: TrendingUp },
-  relatorios: { title: 'Relatórios', subtitle: 'Receita por centro de receita e aging de inadimplência', icon: BarChart3 }
+const STEP_ORDER: Screen[] = ['home', 'recebimentos', 'cobrancas', 'fluxo', 'relatorios'];
+
+const STEP_META: Record<Screen, { label: string; subtitle: string; icon: React.ElementType }> = {
+  home: { label: 'Visão Geral', subtitle: 'Indicadores do período, evolução mensal e ranking de clientes', icon: LayoutDashboard },
+  recebimentos: { label: 'Recebimentos', subtitle: 'Todos os títulos, baixa manual e conciliação OFX', icon: Receipt },
+  cobrancas: { label: 'Cobranças', subtitle: 'Acompanhe envios, inadimplência e cobranças vencidas', icon: Mail },
+  fluxo: { label: 'Fluxo de caixa', subtitle: 'Entradas projetadas por ordem de vencimento', icon: TrendingUp },
+  relatorios: { label: 'Relatórios', subtitle: 'Receita por centro de receita e aging de inadimplência', icon: BarChart3 }
 };
+
+// ─────────────────────────────────────────────────────────
+//  STEPPER — navegação em fluxo de etapas
+// ─────────────────────────────────────────────────────────
+
+function StepperNav({ current, onNavigate, visited, overdueCount }: {
+  current: Screen;
+  onNavigate: (s: Screen) => void;
+  visited: Set<Screen>;
+  overdueCount: number;
+}) {
+  const currentIndex = STEP_ORDER.indexOf(current);
+  return (
+    <Card className="p-3 sm:p-4">
+      <div className="flex items-center">
+        {STEP_ORDER.map((key, i) => {
+          const meta = STEP_META[key];
+          const Icon = meta.icon;
+          const isActive = key === current;
+          const isVisited = visited.has(key);
+          const isLast = i === STEP_ORDER.length - 1;
+          return (
+            <React.Fragment key={key}>
+              <button
+                type="button"
+                onClick={() => onNavigate(key)}
+                className="group flex flex-1 flex-col items-center gap-1.5 sm:flex-initial sm:min-w-[96px]"
+              >
+                <span
+                  className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 text-sm font-black transition sm:h-10 sm:w-10 ${
+                    isActive
+                      ? 'border-transparent text-white shadow-md'
+                      : isVisited
+                        ? 'border-[#4F39F6] text-[#4F39F6] bg-white dark:bg-slate-900'
+                        : 'border-slate-200 text-slate-400 bg-white group-hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900'
+                  }`}
+                  style={isActive ? { background: PRIMARY } : {}}
+                >
+                  <Icon className="h-4 w-4" />
+                  {key === 'cobrancas' && overdueCount > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-black text-white">
+                      {overdueCount > 9 ? '9+' : overdueCount}
+                    </span>
+                  )}
+                </span>
+                <span className={`hidden text-center text-[11px] font-bold leading-tight sm:block ${isActive ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`}>
+                  {meta.label}
+                </span>
+              </button>
+              {!isLast && (
+                <div className={`mx-1 h-0.5 flex-1 rounded-full transition-colors sm:mx-2 ${i < currentIndex ? 'bg-[#4F39F6]' : 'bg-slate-200 dark:bg-slate-800'}`} />
+              )}
+            </React.Fragment>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+function StepFooterNav({ current, onNavigate }: { current: Screen; onNavigate: (s: Screen) => void }) {
+  const idx = STEP_ORDER.indexOf(current);
+  const prev = idx > 0 ? STEP_ORDER[idx - 1] : null;
+  const next = idx < STEP_ORDER.length - 1 ? STEP_ORDER[idx + 1] : null;
+  return (
+    <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-4 dark:border-slate-800">
+      <button
+        type="button"
+        disabled={!prev}
+        onClick={() => prev && onNavigate(prev)}
+        className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+      >
+        <ChevronLeft className="h-4 w-4" /> {prev ? STEP_META[prev].label : 'Início'}
+      </button>
+      <button
+        type="button"
+        disabled={!next}
+        onClick={() => next && onNavigate(next)}
+        className="inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-bold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+        style={{ background: PRIMARY }}
+      >
+        {next ? STEP_META[next].label : 'Fim'} <ChevronRight className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
 
 // ─────────────────────────────────────────────────────────
 //  MAIN COMPONENT
 // ─────────────────────────────────────────────────────────
 
-export default function ContasReceberView({ user }: ContasReceberViewProps) {
+export default function ContasReceberView({ user, onNavigate }: ContasReceberViewProps) {
   const [items, setItems] = useState<ContaReceberExtra[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
   const [screen, setScreen] = useState<Screen>('home');
+  const [visited, setVisited] = useState<Set<Screen>>(() => new Set(['home']));
   const [viewMode, setViewMode] = useState<ViewMode>('lista');
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('todos');
   const [centroFilter, setCentroFilter] = useState('todos');
-
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [formError, setFormError] = useState('');
+  const [selectedItem, setSelectedItem] = useState<ContaReceberExtra | null>(null);
 
   const toast = error ? { type: 'error' as const, message: error } : success ? { type: 'success' as const, message: success } : null;
   const dismissToast = () => { setError(''); setSuccess(''); };
@@ -1098,29 +1078,6 @@ export default function ContasReceberView({ user }: ContasReceberViewProps) {
     } catch (err: any) { setError(err?.message || 'Erro ao excluir.'); }
   };
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const valor = Number(String(form.valor).replace(',', '.'));
-    if (!form.clienteNome.trim()) return setFormError('Informe o nome do cliente.');
-    if (!Number.isFinite(valor) || valor <= 0) return setFormError('Informe um valor maior que zero.');
-    if (!form.dataVencimento) return setFormError('Informe a data de vencimento.');
-    setFormError(''); setSaving(true);
-    try {
-      const created = await addContaReceber(user, {
-        clienteNome: form.clienteNome.trim(), clienteEmail: form.clienteEmail.trim(), clienteDocumento: form.clienteDocumento.trim(),
-        descricao: form.descricao.trim(), valor, dataEmissao: form.dataEmissao, dataVencimento: form.dataVencimento,
-        status: form.dataVencimento < todayISO() ? 'vencido' : 'pendente',
-        observacoes: form.observacoes.trim(), numeroNF: form.numeroNF.trim(), serieNF: form.serieNF.trim(),
-        competencia: form.competencia, centroReceita: form.centroReceita, formaRecebimento: form.formaRecebimento, origem: form.origem.trim()
-      } as any);
-      setItems(prev => [created as ContaReceberExtra, ...prev]);
-      setForm(EMPTY_FORM); setShowForm(false);
-      setSuccess('Recebimento cadastrado com sucesso.');
-    } catch (err: any) {
-      setFormError(err?.message || 'Erro ao criar conta a receber.');
-    } finally { setSaving(false); }
-  };
-
   const handleOFX = async (file: File) => {
     setError(''); setSuccess('');
     const entries = parseOFX(await file.text()).filter(e => e.amount > 0);
@@ -1135,97 +1092,92 @@ export default function ContasReceberView({ user }: ContasReceberViewProps) {
     else setSuccess(`${count} recebimento(s) conciliado(s) pelo OFX.`);
   };
 
-  const cardProps = { onMarkReceived: markReceived, onMarkSent: markSent, onMarkPending: markPending, onDelete: handleDelete };
+  const handleEditSave = async (id: string, updates: Partial<ContaReceberExtra>) => {
+    const updated = await updateContaReceber(id, updates as any);
+    updateLocalItem(updated as ContaReceberExtra);
+    setSelectedItem(updated as ContaReceberExtra);
+    setSuccess('Recebimento atualizado com sucesso.');
+  };
 
-  // ── HOME ──────────────────────────────────────────────
-  if (screen === 'home') {
-    return (
-      <div className="mx-auto max-w-[1440px] space-y-4">
-        {/* Page header */}
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl p-3" style={{ background: PRIMARY }}>
-              <BanknoteArrowUp className="h-6 w-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-black text-slate-900 dark:text-white">Contas a Receber</h1>
-              <p className="text-sm text-slate-500 mt-0.5">Recebimentos, cobrança, inadimplência e fluxo de caixa.</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-900">
-              <button onClick={load} title="Atualizar" className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-white hover:shadow-sm transition dark:text-slate-300 dark:hover:bg-slate-800">
-                <RefreshCw className="h-3.5 w-3.5" /><span className="hidden sm:inline">Atualizar</span>
-              </button>
-              <div className="w-px h-4 bg-slate-200 dark:bg-slate-700" />
-              <label title="Importar OFX" className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition hover:bg-white hover:shadow-sm dark:hover:bg-slate-800" style={{ color: PRIMARY }}>
-                <FileUp className="h-3.5 w-3.5" /><span className="hidden sm:inline">Importar OFX</span>
-                <input type="file" accept=".ofx" className="hidden" onChange={e => e.target.files?.[0] && handleOFX(e.target.files[0])} />
-              </label>
-            </div>
-            <button onClick={() => setShowForm(true)} className="inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-bold text-white transition hover:opacity-90 shrink-0" style={{ background: PRIMARY }}>
-              <Plus className="h-4 w-4" /> Novo recebimento
-            </button>
-          </div>
-        </div>
+  const cardProps = { onMarkReceived: markReceived, onMarkSent: markSent, onMarkPending: markPending, onDelete: handleDelete, onView: setSelectedItem };
 
-        {toast && (
-          <div className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm ${toast.type === 'error' ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
-            <div className="flex items-center gap-2">{toast.type === 'error' ? <AlertCircle className="h-4 w-4 shrink-0" /> : <CheckCircle2 className="h-4 w-4 shrink-0" />}{toast.message}</div>
-            <button onClick={dismissToast}><X className="h-4 w-4" /></button>
-          </div>
-        )}
+  const goToStep = (s: Screen) => {
+    setScreen(s);
+    setVisited(prev => (prev.has(s) ? prev : new Set(prev).add(s)));
+  };
 
-        <HomeScreen stats={stats} byMonth={byMonth} byClient={byClient} onNavigate={setScreen} />
-
-        {/* Fullscreen form */}
-        <FullscreenModal open={showForm} title="Novo recebimento" subtitle="Honorários, NFs, consultorias e receitas recorrentes" icon={BanknoteArrowUp} onClose={() => { setShowForm(false); setFormError(''); }}>
-          <NovoRecebimentoForm saving={saving} form={form} error={formError} onChange={setForm} onSubmit={handleCreate} onClose={() => { setShowForm(false); setFormError(''); }} />
-        </FullscreenModal>
-      </div>
-    );
-  }
-
-  // ── SUB-SCREENS ───────────────────────────────────────
-  const meta = SCREEN_META[screen as Exclude<Screen, 'home'>];
-
-  const screenActions = (
-    <>
-      <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-900">
-        <button onClick={load} title="Atualizar" className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-white hover:shadow-sm transition dark:text-slate-300 dark:hover:bg-slate-800">
-          <RefreshCw className="h-3.5 w-3.5" /><span className="hidden sm:inline">Atualizar</span>
-        </button>
-        <div className="w-px h-4 bg-slate-200 dark:bg-slate-700" />
-        <label title="Importar OFX" className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition hover:bg-white hover:shadow-sm dark:hover:bg-slate-800" style={{ color: PRIMARY }}>
-          <FileUp className="h-3.5 w-3.5" /><span className="hidden sm:inline">Importar OFX</span>
-          <input type="file" accept=".ofx" className="hidden" onChange={e => e.target.files?.[0] && handleOFX(e.target.files[0])} />
-        </label>
-      </div>
-      <button onClick={() => setShowForm(true)} className="inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-bold text-white transition hover:opacity-90" style={{ background: PRIMARY }}>
-        <Plus className="h-4 w-4" /><span className="hidden sm:inline">Novo recebimento</span>
-      </button>
-    </>
-  );
+  const currentMeta = STEP_META[screen];
+  const CurrentIcon = currentMeta.icon;
 
   return (
-    <>
-      <ScreenShell title={meta.title} subtitle={meta.subtitle} icon={meta.icon} onBack={() => setScreen('home')} actions={screenActions} toast={toast} onDismissToast={dismissToast}>
-        {screen === 'recebimentos' && (
-          <RecebimentosScreen
-            filtered={filtered} loading={loading} viewMode={viewMode} setViewMode={setViewMode}
-            search={search} setSearch={setSearch} statusFilter={statusFilter} setStatusFilter={setStatusFilter}
-            centroFilter={centroFilter} setCentroFilter={setCentroFilter}
-            {...cardProps}
-          />
-        )}
-        {screen === 'cobrancas' && <CobrancasScreen filtered={filtered} {...cardProps} />}
-        {screen === 'fluxo' && <FluxoScreen filtered={filtered} stats={stats} />}
-        {screen === 'relatorios' && <RelatoriosScreen byCentro={byCentro} aging={aging} />}
-      </ScreenShell>
+    <div className="mx-auto max-w-[1440px] space-y-4">
+      {/* ── Page header ── */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="rounded-2xl p-3" style={{ background: PRIMARY }}>
+            <BanknoteArrowUp className="h-6 w-6 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-black text-slate-900 dark:text-white">Contas a Receber</h1>
+            <p className="text-sm text-slate-500 mt-0.5">Fluxo guiado: visão geral, recebimentos, cobrança, caixa e relatórios.</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-900">
+            <button onClick={load} title="Atualizar" className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-white hover:shadow-sm transition dark:text-slate-300 dark:hover:bg-slate-800">
+              <RefreshCw className="h-3.5 w-3.5" /><span className="hidden sm:inline">Atualizar</span>
+            </button>
+            <div className="w-px h-4 bg-slate-200 dark:bg-slate-700" />
+            <label title="Importar OFX" className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition hover:bg-white hover:shadow-sm dark:hover:bg-slate-800" style={{ color: PRIMARY }}>
+              <FileUp className="h-3.5 w-3.5" /><span className="hidden sm:inline">Importar OFX</span>
+              <input type="file" accept=".ofx" className="hidden" onChange={e => e.target.files?.[0] && handleOFX(e.target.files[0])} />
+            </label>
+          </div>
+          <button onClick={() => onNavigate?.('novo_recebimento')} className="inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-bold text-white transition hover:opacity-90 shrink-0" style={{ background: PRIMARY }}>
+            <Plus className="h-4 w-4" /> Novo recebimento
+          </button>
+        </div>
+      </div>
 
-      <FullscreenModal open={showForm} title="Novo recebimento" subtitle="Honorários, NFs, consultorias e receitas recorrentes" icon={BanknoteArrowUp} onClose={() => { setShowForm(false); setFormError(''); }}>
-        <NovoRecebimentoForm saving={saving} form={form} error={formError} onChange={setForm} onSubmit={handleCreate} onClose={() => { setShowForm(false); setFormError(''); }} />
-      </FullscreenModal>
-    </>
+      {/* ── Stepper: fluxo guiado ── */}
+      <StepperNav current={screen} onNavigate={goToStep} visited={visited} overdueCount={stats.overdueCount} />
+
+      {/* ── Toast ── */}
+      {toast && (
+        <div className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm ${toast.type === 'error' ? 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300' : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300'}`}>
+          <div className="flex items-center gap-2">{toast.type === 'error' ? <AlertCircle className="h-4 w-4 shrink-0" /> : <CheckCircle2 className="h-4 w-4 shrink-0" />}{toast.message}</div>
+          <button onClick={dismissToast}><X className="h-4 w-4" /></button>
+        </div>
+      )}
+
+      {/* ── Etapa atual ── */}
+      <div className="flex items-center gap-2.5">
+        <div className="rounded-xl p-2" style={{ background: PRIMARY }}>
+          <CurrentIcon className="h-4 w-4 text-white" />
+        </div>
+        <div>
+          <h2 className="text-base font-black text-slate-900 dark:text-white leading-tight">{currentMeta.label}</h2>
+          <p className="text-xs text-slate-500">{currentMeta.subtitle}</p>
+        </div>
+      </div>
+
+      {screen === 'home' && <HomeScreen stats={stats} byMonth={byMonth} byClient={byClient} />}
+      {screen === 'recebimentos' && (
+        <RecebimentosScreen
+          filtered={filtered} loading={loading} viewMode={viewMode} setViewMode={setViewMode}
+          search={search} setSearch={setSearch} statusFilter={statusFilter} setStatusFilter={setStatusFilter}
+          centroFilter={centroFilter} setCentroFilter={setCentroFilter}
+          {...cardProps}
+        />
+      )}
+      {screen === 'cobrancas' && <CobrancasScreen filtered={filtered} {...cardProps} />}
+      {screen === 'fluxo' && <FluxoScreen filtered={filtered} stats={stats} />}
+      {screen === 'relatorios' && <RelatoriosScreen byCentro={byCentro} aging={aging} />}
+
+      {/* ── Navegação entre etapas ── */}
+      <StepFooterNav current={screen} onNavigate={goToStep} />
+
+      <DetalheModal item={selectedItem} onClose={() => setSelectedItem(null)} onSave={handleEditSave} onDelete={handleDelete} />
+    </div>
   );
 }

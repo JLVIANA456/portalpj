@@ -6,3 +6,8 @@ coverage/
 *.log
 .env*
 !.env.example
+.claude/
+.artifact-work/
+*.bak.txt
+script.js
+supabase/.temp/

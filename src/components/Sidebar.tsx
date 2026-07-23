@@ -16,6 +16,7 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  CirclePlus,
   Landmark,
   Mail,
   Users,
@@ -58,25 +59,62 @@ export default function Sidebar({
   const isAdmin = user.role === 'admin_tenant' || user.role === 'super_admin';
   const isSuperAdmin = user.role === 'super_admin';
 
-  // Otimização: Evita recriar o array de navegação a cada render
-  const menuItems = useMemo(() => [
-    { id: 'dashboard', label: 'Visão Geral', icon: Home },
-    { id: 'clientes', label: 'Clientes', icon: Users },
-    { id: 'whatsapp', label: 'WhatsApp', icon: WhatsappIcon },
-    { id: 'emissor_nacional', label: 'Emissor de Notas (Nota do Milhão) SP', icon: ReceiptText },
-    { id: 'portal_nacional', label: 'Portal Nacional', icon: Building2 },
-    { id: 'financeiro', label: 'Financeiro', icon: CircleDollarSign },
-    { id: 'contas_receber', label: 'Contas a Receber', icon: BanknoteArrowUp },
-    { id: 'contas_pagar', label: 'Contas a Pagar', icon: BanknoteArrowDown },
-    { id: 'conciliacao', label: 'Conciliação', icon: ArrowRightLeft },
-    { id: 'cobrancas', label: 'Cobranças', icon: Mail },
-    ...(isAdmin ? [{ id: 'enviar_notas_email', label: 'Enviar Notas', icon: Send }] : []),
-    ...(isAdmin ? [] : [
-      { id: 'enviar_nota', label: 'Enviar Nota', icon: UploadCloud }
-    ]),
-    { id: 'historico', label: isAdmin ? 'Gerenciar Notas' : 'Minhas Notas', icon: History },
-    { id: 'relatorios', label: 'Gerar Relatórios', icon: BarChart3 },
-    ...(isSuperAdmin ? [{ id: 'super_admin', label: 'Gestão de Empresas', icon: Landmark }] : [])
+  // Otimização: Evita recriar a estrutura de navegação a cada render
+  const menuSections = useMemo(() => [
+    {
+      id: 'geral',
+      title: null as string | null,
+      items: [
+        { id: 'dashboard', label: 'Visão Geral', icon: Home }
+      ]
+    },
+    {
+      id: 'relacionamento',
+      title: 'Relacionamento',
+      items: [
+        { id: 'clientes', label: 'Clientes', icon: Users },
+        { id: 'whatsapp', label: 'WhatsApp', icon: WhatsappIcon }
+      ]
+    },
+    {
+      id: 'emissao_fiscal',
+      title: 'Emissão Fiscal',
+      items: [
+        { id: 'emissor_nacional', label: 'Emissor de Notas (Nota do Milhão) SP', icon: ReceiptText },
+        { id: 'portal_nacional', label: 'Portal Nacional', icon: Building2 },
+        ...(isAdmin
+          ? [{ id: 'enviar_notas_email', label: 'Enviar Notas', icon: Send }]
+          : [{ id: 'enviar_nota', label: 'Enviar Nota', icon: UploadCloud }]),
+        { id: 'historico', label: isAdmin ? 'Gerenciar Notas' : 'Minhas Notas', icon: History },
+        { id: 'relatorios', label: 'Gerar Relatórios', icon: BarChart3 }
+      ]
+    },
+    {
+      id: 'bpo_financeiro',
+      title: 'BPO Financeiro',
+      items: [
+        { id: 'financeiro', label: 'Financeiro', icon: CircleDollarSign },
+        { id: 'novo_recebimento', label: 'Novo Recebimento', icon: CirclePlus },
+        { id: 'contas_receber', label: 'Contas a Receber', icon: BanknoteArrowUp },
+        { id: 'novo_lancamento', label: 'Novo Lançamento', icon: CirclePlus },
+        { id: 'contas_pagar', label: 'Contas a Pagar', icon: BanknoteArrowDown },
+        { id: 'conciliacao', label: 'Conciliação de Cartão de Crédito', icon: ArrowRightLeft }
+      ]
+    },
+    {
+      id: 'cobranca',
+      title: 'Cobrança',
+      items: [
+        { id: 'cobrancas', label: 'Cobranças', icon: Mail }
+      ]
+    },
+    ...(isSuperAdmin ? [{
+      id: 'administracao',
+      title: 'Administração' as string | null,
+      items: [
+        { id: 'super_admin', label: 'Gestão de Empresas', icon: Landmark }
+      ]
+    }] : [])
   ], [isAdmin, isSuperAdmin]);
 
   return (
@@ -170,33 +208,48 @@ export default function Sidebar({
         </div>
 
         {/* Navigation list */}
-        <nav className="flex-1 space-y-1.5 px-3 py-4 overflow-y-auto">
-          {menuItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = currentTab === item.id;
-            return (
-              <button
-                key={item.id}
-                id={`tab-${item.id}`}
-                onClick={() => {
-                  onChangeTab(item.id);
-                  onClose();
-                }}
-                title={item.label}
-                aria-label={item.label}
-                className={`flex items-center rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer ${isCollapsed
-                    ? 'justify-center p-3 mx-auto w-12'
-                    : 'w-full gap-3 px-3 py-3'
-                  } ${isActive
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10'
-                    : 'text-slate-400 dark:text-slate-500 transition-colors hover:bg-slate-900 hover:text-slate-100'
-                  }`}
-              >
-                <Icon className="w-4 h-4 flex-shrink-0" />
-                {!isCollapsed && <span className="truncate">{item.label}</span>}
-              </button>
-            );
-          })}
+        <nav className="flex-1 px-3 py-4 overflow-y-auto">
+          {menuSections.map((section, sIdx) => (
+            <div key={section.id} className={sIdx > 0 ? 'mt-4' : ''}>
+              {section.title && (
+                isCollapsed ? (
+                  <div className="mx-auto my-2 h-px w-8 bg-slate-800" />
+                ) : (
+                  <p className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                    {section.title}
+                  </p>
+                )
+              )}
+              <div className="space-y-1.5">
+                {section.items.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = currentTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      id={`tab-${item.id}`}
+                      onClick={() => {
+                        onChangeTab(item.id);
+                        onClose();
+                      }}
+                      title={item.label}
+                      aria-label={item.label}
+                      className={`flex items-center rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer ${isCollapsed
+                          ? 'justify-center p-3 mx-auto w-12'
+                          : 'w-full gap-3 px-3 py-3'
+                        } ${isActive
+                          ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10'
+                          : 'text-slate-400 dark:text-slate-500 transition-colors hover:bg-slate-900 hover:text-slate-100'
+                        }`}
+                    >
+                      <Icon className="w-4 h-4 flex-shrink-0" />
+                      {!isCollapsed && <span className="truncate">{item.label}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
 
         {/* Footer actions */}

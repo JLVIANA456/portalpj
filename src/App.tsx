@@ -18,6 +18,8 @@ import ClientesView from './components/ClientesView';
 import ConciliacaoView from './components/ConciliacaoView';
 import ContasPagarView from './components/ContasPagarView';
 import ContasReceberView from './components/ContasReceberView';
+import NovoLancamentoView from './components/NovoLancamentoView';
+import NovoRecebimentoView from './components/NovoRecebimentoView';
 import FinanceiroView from './components/FinanceiroView';
 import EnviarNotasView from './components/EnviarNotasView';
 import EmissorNacionalModule from './components/emissor/Notadomilhão';
@@ -180,9 +182,13 @@ export default function App() {
       case 'financeiro':
         return <FinanceiroView user={currentUser} />;
       case 'contas_pagar':
-        return <ContasPagarView user={currentUser} />;
+        return <ContasPagarView user={currentUser} onNavigate={changeTab} />;
       case 'contas_receber':
-        return <ContasReceberView user={currentUser} />;
+        return <ContasReceberView user={currentUser} onNavigate={changeTab} />;
+      case 'novo_lancamento':
+        return <NovoLancamentoView user={currentUser} onSuccess={() => changeTab('contas_pagar')} />;
+      case 'novo_recebimento':
+        return <NovoRecebimentoView user={currentUser} onSuccess={() => changeTab('contas_receber')} />;
       case 'enviar_notas_email':
         return <EnviarNotasView user={currentUser} />;
       case 'whatsapp':
